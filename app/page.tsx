@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { isRecoveryLink, recoveryPath } from "@/lib/recovery";
 import { useCallback, useEffect, useState } from "react";
 import {
   CalendarDays,
@@ -85,6 +87,18 @@ export default function Home() {
     }
   }, []);
   useEffect(() => {
+    if (isRecoveryLink(new URL(window.location.href))) {
+      window.location.replace(
+        recoveryPath + window.location.search + window.location.hash,
+      );
+      return;
+    }
+    if (
+      new URLSearchParams(window.location.search).get("geslo") === "spremenjeno"
+    ) {
+      setMessage("Geslo je uspešno spremenjeno. Prijavite se z novim geslom.");
+      window.history.replaceState(null, "", "/");
+    }
     if (!supabase) {
       setLoading(false);
       return;
@@ -129,18 +143,16 @@ export default function Home() {
         end = new Date(String(form.get("ends_at")));
       if (end <= start)
         throw new Error("Zaključek mora biti za začetkom dogodka.");
-      const { error } = await supabase
-        .from("events")
-        .upsert({
-          ...(selected ? { id: selected.id } : {}),
-          title: form.get("title"),
-          starts_at: start.toISOString(),
-          ends_at: end.toISOString(),
-          location: form.get("location"),
-          notes: form.get("notes"),
-          hostesses_needed: Number(form.get("hostesses_needed")),
-          technicians_needed: Number(form.get("technicians_needed")),
-        });
+      const { error } = await supabase.from("events").upsert({
+        ...(selected ? { id: selected.id } : {}),
+        title: form.get("title"),
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+        location: form.get("location"),
+        notes: form.get("notes"),
+        hostesses_needed: Number(form.get("hostesses_needed")),
+        technicians_needed: Number(form.get("technicians_needed")),
+      });
       if (error) throw error;
       setCreating(false);
       setSelected(null);
@@ -379,6 +391,9 @@ export default function Home() {
                   Prijava <ArrowRight size={17} />
                 </button>
               </form>
+              <p>
+                <Link href="/pozabljeno-geslo">Pozabljeno geslo</Link>
+              </p>
             </section>
           ) : !loading && !profile ? (
             <div className="notice">

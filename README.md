@@ -46,3 +46,24 @@ Testi zaženejo migracijo v izoliranem PostgreSQL (PGlite) z minimalnima Auth/St
 GitHub Actions ob push/PR preveri tipe, RLS teste in produkcijsko gradnjo. Za gostovanje nastavite javni spremenljivki v okolju ponudnika (npr. Vercel), brez vključevanja `.env.local` v Git.
 
 Prva različica nima e-poštnih obvestil, samodejnega preprečevanja prekrivanj ali administracijskega vmesnika za ustvarjanje uporabnikov. Razporeditve administrator preveri v koledarju.
+
+## Obnovitev gesla (produkcija)
+
+Na prijavi izberite **Pozabljeno geslo**. Aplikacija pokliče `resetPasswordForEmail` s preusmeritvijo na `/ponastavitev-gesla` na trenutni domeni. Obnovitvena stran sprejme implicitno povezavo `#type=recovery&access_token=…&refresh_token=…`, recovery PKCE `?code=…` ali `?type=recovery&token_hash=…`. Navadna prijavna seja brez obnovitvene povezave ne odpre obrazca. Veljavnost uporabnika preveri prek Supabase Auth, pred spremembo ponovno preveri sejo, nato uporabi `updateUser({ password })`, se lokalno odjavi in preusmeri na prijavo. Enkratni podatki se odstranijo iz naslovne vrstice. Ob osvežitvi strani zahtevajte novo povezavo.
+
+V **Supabase Dashboard → Authentication → URL Configuration** preverite:
+
+- **Site URL:** `https://kd-urniki.vercel.app`
+- **Redirect URLs:** dodajte točno `https://kd-urniki.vercel.app/ponastavitev-gesla`.
+- Za lokalni razvoj po potrebi dodajte `http://localhost:3000/ponastavitev-gesla`. Preview domene dodajte ločeno; v produkciji ne uporabljajte splošne dovoljene preusmeritve na vse domene.
+
+V **Authentication → Email Templates → Reset Password** naj povezava uporablja `{{ .ConfirmationURL }}`. Ne zamenjajte je s samo `{{ .SiteURL }}`, ker tako izgubite obnovitvene podatke. Če uporabljate svojo predlogo s token hash, uporabite `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery` (RedirectTo v tem postopku nima drugih query parametrov). Stare povezave lahko še vedno kažejo na začetno stran; aplikacija jih preusmeri na obrazec z ohranjenimi obnovitvenimi podatki. PKCE povezava potrebuje isti brskalnik, v katerem je bila zahteva ustvarjena. Trenutni klient uporablja implicitni tok, zato je standardno e-poštno povezavo mogoče odpreti tudi v drugem brskalniku.
+
+Po objavi te veje v Vercel preverite na produkciji z dejanskim testnim računom:
+
+1. Zahtevajte obnovitev in preverite, da povezava v prejetem sporočilu kaže na pravilni Supabase projekt ter vsebuje pravilni `redirect_to`.
+2. Odprite povezavo, vnesite in potrdite novo geslo (vsaj 12 znakov). Preverite tudi neusklajeni gesli.
+3. Preverite vrnitev na prijavo in prijavo z novim geslom; staro geslo mora biti zavrnjeno.
+4. Preverite pretečeno in ponovno uporabljeno povezavo ter neposreden obisk obnovitvene strani brez povezave. Obrazec ne sme biti na voljo.
+
+Nastavitve v Supabase Dashboard niso del migracij SQL in jih ta veja ne spremeni. Avtomatizirani testi preverijo obdelavo povezav in Auth klice z nadomestnim testnim odjemalcem; dejanski e-poštni tok potrebuje dostop do testnega računa in njegovega nabiralnika. Skrivnih ključev in obnovitvenih povezav ne vpisujte v Git, dnevnike ali pogovor.
