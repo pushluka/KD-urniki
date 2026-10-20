@@ -16,5 +16,19 @@ export type Event = {
   notes: string;
   hostesses_needed: number;
   technicians_needed: number;
+  accounting_code: "110" | "111" | null;
 };
-export type Assignment = { event_id: string; user_id: string };
+export type Assignment = {
+  event_id: string;
+  user_id: string;
+  arrives_at: string;
+  finishes_at: string;
+};
+export type ExternalAssignment = {
+  id: string;
+  event_id: string;
+  full_name: string;
+  role: "hostesa" | "tehnik";
+  arrives_at: string;
+  finishes_at: string;
+};
