@@ -944,3 +944,101 @@ input[type="checkbox"] {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+/* Native dialog uses the top layer: event details cannot be clipped by the calendar. */
+.event-dialog {
+  margin: auto;
+  border: 0;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  overscroll-behavior: contain;
+}
+.event-dialog::backdrop {
+  background: #24201866;
+  backdrop-filter: blur(3px);
+}
+.event-dialog .close {
+  min-width: 44px;
+  min-height: 44px;
+  z-index: 1;
+}
+.event {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+.staffing h4 {
+  margin: 20px 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.staff-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.staff-card > strong {
+  display: block;
+  margin-bottom: 12px;
+}
+.staff-card form {
+  margin-top: 12px;
+}
+.staff-card fieldset,
+.staff-add fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+.staff-add {
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  padding-top: 8px;
+}
+.staff-add label,
+.staff-card label {
+  min-width: 0;
+}
+.staff-add input,
+.staff-card input,
+.staff-add select {
+  min-width: 0;
+  max-width: 100%;
+}
+.staff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.staff-actions button,
+.staff-add button {
+  min-height: 44px;
+}
+.remove-assignment {
+  color: #b94736;
+}
+.external-label {
+  font-size: 11px;
+  color: #888;
+}
+.staffing .time-zone-note {
+  font-size: 11px;
+}
+@media (max-width: 760px) {
+  .event-dialog {
+    padding: 28px 16px;
+  }
+  .event-dialog h2 {
+    padding-right: 35px;
+    overflow-wrap: anywhere;
+  }
+  .staff-card {
+    padding: 12px;
+  }
+  .staffing input {
+    font-size: 16px;
+  }
+}

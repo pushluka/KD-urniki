@@ -67,3 +67,76 @@ Po objavi te veje v Vercel preverite na produkciji z dejanskim testnim računom:
 4. Preverite pretečeno in ponovno uporabljeno povezavo ter neposreden obisk obnovitvene strani brez povezave. Obrazec ne sme biti na voljo.
 
 Nastavitve v Supabase Dashboard niso del migracij SQL in jih ta veja ne spremeni. Avtomatizirani testi preverijo obdelavo povezav in Auth klice z nadomestnim testnim odjemalcem; dejanski e-poštni tok potrebuje dostop do testnega računa in njegovega nabiralnika. Skrivnih ključev in obnovitvenih povezav ne vpisujte v Git, dnevnike ali pogovor.
+
+## Nadgradnja dogodkov in razporedov (issue #3)
+
+Pred uporabo nove različice mora skrbnik baze izvesti **novo** migracijo
+`supabase/migrations/202610200002_event_staffing.sql`. Produkcijska baza s tem
+repozitorijem ni bila samodejno spremenjena.
+
+1. Naredite varnostno kopijo baze in najprej preverite nadgradnjo na testnem projektu.
+2. Če začetna shema še ni nameščena, najprej izvedite `202610200001_initial.sql`.
+   Na obstoječi bazi začetne migracije **ne zaganjajte ponovno**.
+3. V Supabase → SQL Editor prilepite **celotno** datoteko
+   `202610200002_event_staffing.sql` in izvedite enkrat; ali uporabite običajni
+   Supabase CLI `supabase db push` za že povezan projekt s pravilno zgodovino migracij.
+   Migracija je transakcijska: ob napaki se spremembe razveljavijo.
+4. Migracija ohrani stare dogodke in razporeditve. Starim razporeditvam začetno
+   nastavi prihod/zaključek na začetek/konec dogodka. Administrator naj te ure
+   preveri in po potrebi popravi. Starim dogodkom postavka ostane nedoločena;
+   ni varno ugibati med 110 in 111. Pri ustvarjanju in urejanju v aplikaciji
+   je izbira obvezna. Baza zavrne druge vrednosti in odstranitev že določene postavke.
+5. Po migraciji in pregledu PR objavite novo različico aplikacije. Med nadgradnjo
+   ne urejajte razporedov s staro različico: ta še ne pošilja obveznih individualnih ur.
+   Nova različica potrebuje tudi tabelo `external_assignments`, zato migracijo izvedite
+   pred njeno uporabo. Migracija in objava nista izvedeni samodejno.
+6. Preverite spodnje scenarije z administratorjem, tehnikom in hosteso.
+
+Administrator v podrobnostih dogodka doda člana po imenu ter za vsakega določi
+**datum in uro prihoda** in **predvidenega zaključka**. Datum omogoča tudi delo
+čez polnoč. Ure se lahko razlikujejo med osebami in so lahko zunaj trajanja dogodka.
+Shranijo se kot `timestamptz`; vnosna polja in razpored uporabljajo časovni pas
+brskalnika, izpisan nad razporedom. Za delo v Sloveniji nastavite Europe/Ljubljana.
+Urejanje ur dogodka ne prepiše že shranjenih individualnih ur.
+
+Tehnik se lahko sam prijavi, popravi lastne ure ali odjavi. RLS preveri
+`auth.uid()` in vlogo iz zaupanja vrednega profila; tehnik ne more prijaviti
+hostese ali drugega tehnika, spreminjati tujih ur ali računovodske postavke.
+Hostese razporeja samo administrator. Vsi člani ekipe še vedno berejo poimenski
+razpored, zasebne PDF-je pa le administrator in dejansko dodeljeni tehniki.
+Samoprijava tehnika omogoči dosedanji dostop do PDF-jev za ta dogodek; odjava ga odvzame.
+
+Zunanji sodelavec ima ime, vlogo in individualne ure v ločeni tabeli
+`external_assignments`. Vnaša, ureja in odstranjuje ga samo administrator.
+Vnos ne ustvari uporabniškega računa ali pravice do zasebnih dokumentov.
+Izračun delovnih ur in mesečni seštevki niso vključeni.
+
+### Preverjanje nadgradnje
+
+```sh
+npm test
+npm run build
+npm run typecheck
+npx playwright install chromium
+npm run test:e2e
+```
+
+Če je Chromium že nameščen v sistemu, lahko namesto prenosa uporabite:
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:e2e
+```
+
+Brskalniški testi pokrijejo namizni prikaz 1440 × 1000 in mobilni prikaz Pixel 7:
+klik/dotik dogodka, odpiranje/zapiranje pogovornega okna, zanesljivo začetno nalaganje
+pri drugačnem datumu v brskalniku, ohranitev postavke ter
+individualnih ur po osvežitvi, zunanje sodelavce in dovoljene obrazce za vsako vlogo.
+Uporabljajo izključno testne podatke in lokalni Auth/REST adapter z izolirano
+PostgreSQL bazo PGlite, v kateri se izvedeta obe dejanski migraciji in RLS.
+To preveri UI ter pravice brez poseganja v produkcijo; ni preizkus živega Supabase
+omrežja ali fizičnih telefonov. Testni odjemalec ni del produkcijske aplikacije.
+
+Po objavi ročno preverite tudi v svojem Supabase projektu: ustvarite dogodek s 110,
+ga uredite v 111 in osvežite stran; dodajte dve osebi z različnimi urami in enega
+zunanjega sodelavca; preverite samoprijavo tehnika in da hostesa nima možnosti
+urejanja. Preverite tudi, da sprememba ur dogodka ne spremeni ur osebja.

@@ -1,5 +1,8 @@
 "use client";
 import Link from "next/link";
+import { EventDialog } from "@/components/event-dialog";
+import { EventStaffing } from "@/components/event-staffing";
+import { localDateTime as localInput } from "@/lib/staffing";
 import { isRecoveryLink, recoveryPath } from "@/lib/recovery";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -22,14 +25,9 @@ import {
   type Event,
   type Profile,
   type Assignment,
+  type ExternalAssignment,
 } from "@/lib/supabase";
 const locations = ["Kulturni dom", "Družbeni dom", "Druga lokacija"];
-const localInput = (value: string) => {
-  const d = new Date(value);
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
-};
 const dateLabel = (d: string) =>
   new Date(d).toLocaleString("sl-SI", {
     day: "numeric",
@@ -39,10 +37,17 @@ const dateLabel = (d: string) =>
     timeZone: "Europe/Ljubljana",
   });
 export default function Home() {
+  // Calendar dates use the browser's local timezone. Render them only after mount
+  // so prerendered dates cannot replace a user's first interaction during hydration.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(true);
+  }, []);
   const [profile, setProfile] = useState<Profile | null>(null),
     [events, setEvents] = useState<Event[]>([]),
     [people, setPeople] = useState<Profile[]>([]),
-    [assignments, setAssignments] = useState<Assignment[]>([]);
+    [assignments, setAssignments] = useState<Assignment[]>([]),
+    [external, setExternal] = useState<ExternalAssignment[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null),
     [loading, setLoading] = useState(true),
     [message, setMessage] = useState(""),
@@ -52,23 +57,35 @@ export default function Home() {
     [month, setMonth] = useState(
       new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     ),
-    [selected, setSelected] = useState<Event | null>(null),
+    [selectedId, setSelectedId] = useState<string | null>(null),
     [creating, setCreating] = useState(false);
+  const selected = events.find((event) => event.id === selectedId) ?? null;
+  function openEvent(event: Event) {
+    setSelectedId(event.id);
+    setCreating(false);
+    setMessage("");
+  }
+  function closeEvent() {
+    setSelectedId(null);
+    setCreating(false);
+    setMessage("");
+  }
   const [documentLinks, setDocumentLinks] = useState<
     { name: string; url: string }[]
   >([]);
   useEffect(() => {
     setDocumentLinks([]);
-  }, [selected]);
+  }, [selectedId]);
   const admin = profile?.role === "administrator";
   const load = useCallback(async (id: string) => {
-    if (!supabase) return;
+    if (!supabase) return false;
     setLoading(true);
     try {
       const results = await Promise.all([
         supabase.from("profiles").select("*"),
         supabase.from("events").select("*").order("starts_at"),
         supabase.from("assignments").select("*"),
+        supabase.from("external_assignments").select("*"),
       ]);
       for (const r of results) if (r.error) throw r.error;
       const ps = results[0].data as Profile[];
@@ -76,12 +93,15 @@ export default function Home() {
       setProfile(ps.find((p) => p.id === id) ?? null);
       setEvents(results[1].data as Event[]);
       setAssignments(results[2].data as Assignment[]);
+      setExternal(results[3].data as ExternalAssignment[]);
+      return true;
     } catch (e) {
       setMessage(
         e instanceof Error
           ? e.message
           : "Podatkov ni bilo mogoče naložiti. Preverite povezavo in migracijo.",
       );
+      return false;
     } finally {
       setLoading(false);
     }
@@ -112,6 +132,9 @@ export default function Home() {
         setEvents([]);
         setPeople([]);
         setAssignments([]);
+        setExternal([]);
+        setSelectedId(null);
+        setCreating(false);
         setLoading(false);
       }
     });
@@ -152,32 +175,17 @@ export default function Home() {
         notes: form.get("notes"),
         hostesses_needed: Number(form.get("hostesses_needed")),
         technicians_needed: Number(form.get("technicians_needed")),
+        accounting_code: form.get("accounting_code"),
       });
       if (error) throw error;
       setCreating(false);
-      setSelected(null);
+      setSelectedId(null);
       await load(sessionId);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Shranjevanje ni uspelo.");
     } finally {
       setBusy(false);
     }
-  }
-  async function assign(user: Profile, checked: boolean) {
-    if (!supabase || !selected || !sessionId) return;
-    setBusy(true);
-    const r = checked
-      ? await supabase
-          .from("assignments")
-          .insert({ event_id: selected.id, user_id: user.id })
-      : await supabase
-          .from("assignments")
-          .delete()
-          .eq("event_id", selected.id)
-          .eq("user_id", user.id);
-    if (r.error) setMessage(r.error.message);
-    else await load(sessionId);
-    setBusy(false);
   }
   async function upload(file: File) {
     if (!supabase || !selected) return;
@@ -235,6 +243,12 @@ export default function Home() {
   });
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate(),
     offset = (month.getDay() + 6) % 7;
+  if (!ready)
+    return (
+      <main className="auth-page">
+        <p role="status">Nalaganje urnikov …</p>
+      </main>
+    );
   return (
     <div className="shell">
       <aside>
@@ -553,10 +567,9 @@ export default function Home() {
                               <button
                                 className={`event color-${locations.indexOf(e.location)}`}
                                 key={e.id}
-                                onClick={() => {
-                                  setSelected(e);
-                                  setMessage("");
-                                }}
+                                type="button"
+                                aria-label={`Odpri dogodek: ${e.title}`}
+                                onClick={() => openEvent(e)}
                               >
                                 <small>
                                   {new Date(e.starts_at).toLocaleTimeString(
@@ -599,7 +612,8 @@ export default function Home() {
                   <button
                     className="event-row"
                     key={e.id}
-                    onClick={() => setSelected(e)}
+                    type="button"
+                    onClick={() => openEvent(e)}
                   >
                     <div className="date-tile">
                       <strong>{new Date(e.starts_at).getDate()}</strong>
@@ -639,231 +653,231 @@ export default function Home() {
         </div>
       </main>
       {(creating || selected) && (
-        <div className="modal-backdrop">
-          <section
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={creating ? "Nov dogodek" : selected?.title}
-          >
-            <button
-              className="close"
-              aria-label="Zapri"
-              onClick={() => {
-                setCreating(false);
-                setSelected(null);
-              }}
-            >
-              <X />
-            </button>
-            {creating ? (
-              <>
-                <div className="eyebrow">NAČRTOVANJE</div>
-                <h2>{selected ? "Uredi dogodek" : "Nov dogodek"}</h2>
-                <form action={saveEvent}>
+        <EventDialog
+          title={
+            creating
+              ? selected
+                ? "Uredi dogodek"
+                : "Nov dogodek"
+              : selected!.title
+          }
+          onClose={closeEvent}
+        >
+          <button className="close" aria-label="Zapri" onClick={closeEvent}>
+            <X />
+          </button>
+          {creating ? (
+            <>
+              <div className="eyebrow">NAČRTOVANJE</div>
+              <h2>{selected ? "Uredi dogodek" : "Nov dogodek"}</h2>
+              <form action={saveEvent}>
+                <label>
+                  Naslov dogodka
+                  <input
+                    name="title"
+                    defaultValue={selected?.title}
+                    maxLength={160}
+                    required
+                  />
+                </label>
+                <div className="two">
                   <label>
-                    Naslov dogodka
+                    Začetek (vaš lokalni čas)
                     <input
-                      name="title"
-                      defaultValue={selected?.title}
-                      maxLength={160}
+                      name="starts_at"
+                      defaultValue={
+                        selected ? localInput(selected.starts_at) : undefined
+                      }
+                      type="datetime-local"
                       required
                     />
                   </label>
-                  <div className="two">
-                    <label>
-                      Začetek (vaš lokalni čas)
-                      <input
-                        name="starts_at"
-                        defaultValue={
-                          selected ? localInput(selected.starts_at) : undefined
-                        }
-                        type="datetime-local"
-                        required
-                      />
-                    </label>
-                    <label>
-                      Zaključek
-                      <input
-                        name="ends_at"
-                        defaultValue={
-                          selected ? localInput(selected.ends_at) : undefined
-                        }
-                        type="datetime-local"
-                        required
-                      />
-                    </label>
-                  </div>
                   <label>
-                    Lokacija
-                    <select name="location" defaultValue={selected?.location}>
-                      {locations.map((l) => (
-                        <option key={l}>{l}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="two">
-                    <label>
-                      Število hostes
-                      <input
-                        name="hostesses_needed"
-                        type="number"
-                        min="0"
-                        max="100"
-                        defaultValue={selected?.hostesses_needed ?? 0}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Število tehnikov
-                      <input
-                        name="technicians_needed"
-                        type="number"
-                        min="0"
-                        max="100"
-                        defaultValue={selected?.technicians_needed ?? 0}
-                        required
-                      />
-                    </label>
-                  </div>
-                  <label>
-                    Opombe
-                    <textarea
-                      name="notes"
-                      defaultValue={selected?.notes}
-                      rows={3}
+                    Zaključek
+                    <input
+                      name="ends_at"
+                      defaultValue={
+                        selected ? localInput(selected.ends_at) : undefined
+                      }
+                      type="datetime-local"
+                      required
                     />
                   </label>
-                  <button className="primary" disabled={busy}>
-                    Shrani dogodek
-                  </button>
-                </form>
-              </>
-            ) : (
-              selected && (
-                <>
-                  <span className="badge">{selected.location}</span>
-                  <h2>{selected.title}</h2>
-                  <p>
-                    {dateLabel(selected.starts_at)} –{" "}
-                    {dateLabel(selected.ends_at)}
-                  </p>
-                  <p className="notes">{selected.notes}</p>
-                  <h3>Razpored ekipe</h3>
-                  <p>
-                    Potrebujemo {selected.hostesses_needed} hostes in{" "}
-                    {selected.technicians_needed} tehnikov.
-                  </p>
-                  {people
-                    .filter((p) => p.role !== "administrator")
-                    .map((p) => (
-                      <label className="assignment" key={p.id}>
-                        <input
-                          type="checkbox"
-                          disabled={!admin || busy}
-                          checked={assignments.some(
-                            (a) =>
-                              a.event_id === selected.id && a.user_id === p.id,
-                          )}
-                          onChange={(e) => void assign(p, e.target.checked)}
-                        />
-                        <span>
-                          {p.full_name}
-                          <small>{p.role}</small>
-                        </span>
-                      </label>
+                </div>
+                <label>
+                  Lokacija
+                  <select name="location" defaultValue={selected?.location}>
+                    {locations.map((l) => (
+                      <option key={l}>{l}</option>
                     ))}
-                  {(admin || profile?.role === "tehnik") && (
-                    <div className="documents">
-                      <h3>Tehnična dokumentacija</h3>
-                      <button
-                        className="outline"
-                        disabled={busy}
-                        onClick={() => void documents()}
-                      >
-                        <FileText size={16} /> Prikaži PDF-dokumente
-                      </button>
-                      {documentLinks.map((doc, i) => (
-                        <p key={doc.name}>
-                          <a
-                            className="document-link"
-                            href={doc.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Odpri PDF {i + 1} ↗
-                          </a>
-                        </p>
-                      ))}
-                      {documentLinks.length > 0 && (
-                        <p>
-                          Povezave veljajo 60 sekund. Za osvežitev znova
-                          kliknite gumb.
-                        </p>
-                      )}
-                      {admin && (
-                        <label>
-                          Naloži zasebni PDF (do 20 MB)
-                          <input
-                            type="file"
-                            accept="application/pdf"
-                            disabled={busy}
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) void upload(f);
-                            }}
-                          />
-                        </label>
-                      )}
-                    </div>
-                  )}
-                  {admin && (
+                  </select>
+                </label>
+                <label>
+                  Računovodska postavka
+                  <select
+                    name="accounting_code"
+                    defaultValue={selected?.accounting_code ?? ""}
+                    required
+                  >
+                    <option value="" disabled>
+                      Izberite postavko
+                    </option>
+                    <option value="110">110</option>
+                    <option value="111">111</option>
+                  </select>
+                </label>
+                <div className="two">
+                  <label>
+                    Število hostes
+                    <input
+                      name="hostesses_needed"
+                      type="number"
+                      min="0"
+                      max="100"
+                      defaultValue={selected?.hostesses_needed ?? 0}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Število tehnikov
+                    <input
+                      name="technicians_needed"
+                      type="number"
+                      min="0"
+                      max="100"
+                      defaultValue={selected?.technicians_needed ?? 0}
+                      required
+                    />
+                  </label>
+                </div>
+                <label>
+                  Opombe
+                  <textarea
+                    name="notes"
+                    defaultValue={selected?.notes}
+                    rows={3}
+                  />
+                </label>
+                <button className="primary" disabled={busy}>
+                  Shrani dogodek
+                </button>
+              </form>
+            </>
+          ) : (
+            selected && (
+              <>
+                <span className="badge">{selected.location}</span>
+                <h2>{selected.title}</h2>
+                <p>
+                  {dateLabel(selected.starts_at)} –{" "}
+                  {dateLabel(selected.ends_at)}
+                </p>
+                <p className="notes">{selected.notes}</p>
+                <p>
+                  Računovodska postavka:{" "}
+                  <strong>{selected.accounting_code ?? "Ni določena"}</strong>
+                </p>
+                <EventStaffing
+                  key={selected.id}
+                  event={selected}
+                  profile={profile}
+                  people={people}
+                  assignments={assignments}
+                  external={external}
+                  onSaved={async () => {
+                    if (!sessionId || !(await load(sessionId)))
+                      throw new Error(
+                        "Osvežitev razporeda ni uspela. Osvežite stran in preverite shranjene podatke.",
+                      );
+                  }}
+                />
+                {(admin || profile?.role === "tehnik") && (
+                  <div className="documents">
+                    <h3>Tehnična dokumentacija</h3>
                     <button
                       className="outline"
-                      onClick={() => setCreating(true)}
-                    >
-                      Uredi dogodek
-                    </button>
-                  )}
-                  {admin && (
-                    <button
-                      className="danger"
                       disabled={busy}
-                      onClick={async () => {
-                        if (
-                          !supabase ||
-                          !sessionId ||
-                          !confirm(
-                            "Ali želite izbrisati dogodek in njegov razpored?",
-                          )
-                        )
-                          return;
-                        setBusy(true);
-                        const { error } = await supabase
-                          .from("events")
-                          .delete()
-                          .eq("id", selected.id);
-                        if (error) setMessage(error.message);
-                        else {
-                          setSelected(null);
-                          await load(sessionId);
-                        }
-                        setBusy(false);
-                      }}
+                      onClick={() => void documents()}
                     >
-                      Izbriši dogodek
+                      <FileText size={16} /> Prikaži PDF-dokumente
                     </button>
-                  )}
-                </>
-              )
-            )}
-            {message && (
-              <p role="status" className="notice">
-                {message}
-              </p>
-            )}
-          </section>
-        </div>
+                    {documentLinks.map((doc, i) => (
+                      <p key={doc.name}>
+                        <a
+                          className="document-link"
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Odpri PDF {i + 1} ↗
+                        </a>
+                      </p>
+                    ))}
+                    {documentLinks.length > 0 && (
+                      <p>
+                        Povezave veljajo 60 sekund. Za osvežitev znova kliknite
+                        gumb.
+                      </p>
+                    )}
+                    {admin && (
+                      <label>
+                        Naloži zasebni PDF (do 20 MB)
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          disabled={busy}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) void upload(f);
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+                {admin && (
+                  <button className="outline" onClick={() => setCreating(true)}>
+                    Uredi dogodek
+                  </button>
+                )}
+                {admin && (
+                  <button
+                    className="danger"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (
+                        !supabase ||
+                        !sessionId ||
+                        !confirm(
+                          "Ali želite izbrisati dogodek in njegov razpored?",
+                        )
+                      )
+                        return;
+                      setBusy(true);
+                      const { error } = await supabase
+                        .from("events")
+                        .delete()
+                        .eq("id", selected.id);
+                      if (error) setMessage(error.message);
+                      else {
+                        setSelectedId(null);
+                        await load(sessionId);
+                      }
+                      setBusy(false);
+                    }}
+                  >
+                    Izbriši dogodek
+                  </button>
+                )}
+              </>
+            )
+          )}
+          {message && (
+            <p role="status" className="notice">
+              {message}
+            </p>
+          )}
+        </EventDialog>
       )}
     </div>
   );
