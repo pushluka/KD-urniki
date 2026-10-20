@@ -6,7 +6,12 @@ export const supabase =
     ? createClient(url, key, { auth: { detectSessionInUrl: false } })
     : null;
 export type Role = "administrator" | "hostesa" | "tehnik";
-export type Profile = { id: string; full_name: string; role: Role };
+export type Profile = {
+  id: string;
+  full_name: string;
+  role: Role;
+  is_active: boolean;
+};
 export type Event = {
   id: string;
   title: string;

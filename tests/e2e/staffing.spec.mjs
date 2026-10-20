@@ -14,7 +14,7 @@ async function login(page, role = "admin") {
     page.getByText("Nalaganje dogodkov …", { exact: true }),
   ).toHaveCount(0);
   await page
-    .getByLabel("E-pošta", { exact: true })
+    .getByLabel("Uporabniško ime ali e-pošta", { exact: true })
     .fill(`${role}@example.test`);
   await page.getByLabel("Geslo", { exact: true }).fill("test-password");
   await page.getByRole("button", { name: "Prijava", exact: true }).click();

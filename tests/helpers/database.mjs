@@ -48,6 +48,13 @@ export async function database() {
     ids.other,
   ]);
   await migrate(db, "202610200002_event_staffing.sql");
+  await db.exec(
+    "create role service_role bypassrls; grant usage on schema public,auth,storage to service_role;",
+  );
+  await migrate(db, "202610200003_staff_accounts.sql");
+  await db.exec(
+    "grant all on all tables in schema public,auth,storage to service_role;",
+  );
   return db;
 }
 export async function asUser(db, id) {

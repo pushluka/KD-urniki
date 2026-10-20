@@ -151,11 +151,30 @@ export default function Home() {
   async function login(form: FormData) {
     if (!supabase) return;
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: String(form.get("email")),
-      password: String(form.get("password")),
-    });
-    setMessage(error ? "Prijava ni uspela. Preverite e-pošto in geslo." : "");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identity: String(form.get("identity")),
+          password: String(form.get("password")),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Prijava ni uspela.");
+      const { error } = await supabase.auth.setSession({
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+      });
+      if (error) throw new Error("Prijava ni uspela. Poskusite znova.");
+      setMessage("");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Prijava ni uspela. Poskusite znova.",
+      );
+    }
     setBusy(false);
   }
   async function saveEvent(form: FormData) {
@@ -277,6 +296,12 @@ export default function Home() {
               {view === name && <span className="nav-dot" />}
             </button>
           ))}
+          {admin && (
+            <Link className="nav" href="/osebje">
+              <Users size={19} />
+              Osebje
+            </Link>
+          )}
         </nav>
         <div className="aside-bottom">
           <div className="help">
@@ -320,6 +345,15 @@ export default function Home() {
               month: "long",
             })}
           </span>
+          {sessionId && (
+            <button
+              className="mobile-logout"
+              aria-label="Odjava"
+              onClick={() => void supabase?.auth.signOut()}
+            >
+              <LogOut size={18} />
+            </button>
+          )}
         </header>
         <div className="content">
           <div className="page-heading">
@@ -383,11 +417,11 @@ export default function Home() {
               <p>Uporabite svoj službeni uporabniški račun.</p>
               <form action={login}>
                 <label>
-                  E-pošta
+                  Uporabniško ime ali e-pošta
                   <input
-                    name="email"
-                    type="email"
-                    autoComplete="email"
+                    name="identity"
+                    type="text"
+                    autoComplete="username"
                     required
                   />
                 </label>
