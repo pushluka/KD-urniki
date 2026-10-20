@@ -29,7 +29,11 @@ export default function ForgotPassword() {
       <section className="panel login">
         <div className="eyebrow">KD GROSUPLJE · URNIKI</div>
         <h1>Pozabljeno geslo</h1>
-        <p>Poslali vam bomo povezavo za varno nastavitev novega gesla.</p>
+        <p>
+          Poslali vam bomo povezavo za varno nastavitev novega gesla na e-pošto
+          računa. Če uporabljate uporabniško ime brez e-pošte za obnovitev, se
+          obrnite na administratorja.
+        </p>
         {!supabase ? (
           <p role="alert">Povezava Supabase ni nastavljena.</p>
         ) : sent ? (

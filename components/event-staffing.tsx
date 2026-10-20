@@ -292,6 +292,7 @@ export function EventStaffing({
                     .filter(
                       (p) =>
                         p.role !== "administrator" &&
+                        p.is_active &&
                         !rows.some((a) => a.user_id === p.id),
                     )
                     .map((p) => (
@@ -312,14 +313,12 @@ export function EventStaffing({
               try {
                 const times = assignmentTimes(form);
                 await mutate(() =>
-                  supabase!
-                    .from("external_assignments")
-                    .insert({
-                      event_id: event.id,
-                      full_name: String(form.get("full_name")).trim(),
-                      role: form.get("role"),
-                      ...times,
-                    }),
+                  supabase!.from("external_assignments").insert({
+                    event_id: event.id,
+                    full_name: String(form.get("full_name")).trim(),
+                    role: form.get("role"),
+                    ...times,
+                  }),
                 );
               } catch (e) {
                 setError(e instanceof Error ? e.message : "Preverite podatke.");
