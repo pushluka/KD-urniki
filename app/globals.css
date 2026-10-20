@@ -926,3 +926,21 @@ input[type="checkbox"] {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.auth-page {
+  margin: 0;
+  width: 100%;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+.auth-page .login {
+  width: 100%;
+  margin: 0;
+}
+.auth-page a,
+.login a {
+  color: #b65326;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
