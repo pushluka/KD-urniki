@@ -27,7 +27,11 @@ export async function backend(page) {
       url = new URL(req.url),
       api = fixture.api;
     let res;
-    if (url.pathname === "/api/auth/login") res = await api.login(req);
+    if (url.pathname === "/api/auth/password-status")
+      res = await api.passwordStatus(req);
+    else if (url.pathname === "/api/auth/change-initial-password")
+      res = await api.changeInitialPassword(req);
+    else if (url.pathname === "/api/auth/login") res = await api.login(req);
     else if (url.pathname === "/api/staff")
       res = await (req.method === "GET" ? api.list(req) : api.create(req));
     else {

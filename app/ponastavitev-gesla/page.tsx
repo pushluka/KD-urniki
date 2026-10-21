@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { staffRequest } from "@/lib/staff-client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -34,12 +35,29 @@ export default function ResetPassword() {
     setBusy(true);
     setMessage("");
     try {
-      await updateRecoveryPassword(
-        supabase.auth,
-        userId,
-        String(form.get("password")),
-        String(form.get("confirmation")),
-      );
+      const status = await staffRequest("/api/auth/password-status");
+      if (status.must_change_password) {
+        const changed = await staffRequest(
+          "/api/auth/change-initial-password",
+          "POST",
+          {
+            password: String(form.get("password")),
+            confirmation: String(form.get("confirmation")),
+          },
+        );
+        const { error } = await supabase.auth.setSession(changed);
+        if (error)
+          throw new Error(
+            "Geslo je spremenjeno. Ponovno se prijavite z novim geslom.",
+          );
+        await supabase.auth.signOut({ scope: "local" });
+      } else
+        await updateRecoveryPassword(
+          supabase.auth,
+          userId,
+          String(form.get("password")),
+          String(form.get("confirmation")),
+        );
       window.location.replace("/?geslo=spremenjeno");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : invalidRecovery);

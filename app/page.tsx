@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { staffRequest } from "@/lib/staff-client";
 import { EventDialog } from "@/components/event-dialog";
 import { EventStaffing } from "@/components/event-staffing";
 import { localDateTime as localInput } from "@/lib/staffing";
@@ -39,6 +40,7 @@ const dateLabel = (d: string) =>
 export default function Home() {
   // Calendar dates use the browser's local timezone. Render them only after mount
   // so prerendered dates cannot replace a user's first interaction during hydration.
+  const [accessChecked, setAccessChecked] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     setReady(true);
@@ -81,6 +83,12 @@ export default function Home() {
     if (!supabase) return false;
     setLoading(true);
     try {
+      const access = await staffRequest("/api/auth/password-status");
+      if (access.must_change_password) {
+        window.location.replace("/nastavi-geslo");
+        return false;
+      }
+      setAccessChecked(true);
       const results = await Promise.all([
         supabase.from("profiles").select("*"),
         supabase.from("events").select("*").order("starts_at"),
@@ -128,6 +136,7 @@ export default function Home() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSessionId(session?.user.id ?? null);
       if (!session) {
+        setAccessChecked(false);
         setProfile(null);
         setEvents([]);
         setPeople([]);
@@ -262,10 +271,17 @@ export default function Home() {
   });
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate(),
     offset = (month.getDay() + 6) % 7;
-  if (!ready)
+  if (!ready || (sessionId && !accessChecked))
     return (
       <main className="auth-page">
-        <p role="status">Nalaganje urnikov …</p>
+        <div>
+          <p role="status">{message || "Nalaganje urnikov …"}</p>
+          {message && (
+            <button onClick={() => void supabase?.auth.signOut()}>
+              Odjava
+            </button>
+          )}
+        </div>
       </main>
     );
   return (

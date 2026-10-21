@@ -152,7 +152,11 @@ test("safe account creation, unique normalized usernames, password login and leg
       )
     ).rows.map((r) => r.column_name);
     assert.equal(
-      columns.some((c) => c.includes("password") || c === "email"),
+      columns.some(
+        (c) =>
+          (c.includes("password") && c !== "must_change_password") ||
+          c === "email",
+      ),
       false,
     );
   } finally {
