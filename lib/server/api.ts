@@ -103,6 +103,55 @@ export function createApi({
   appOrigin: string;
   minimumLoginMs?: number;
 }) {
+  // Decode only AFTER getUser has verified the token with Supabase Auth.
+  function tokenNonce(token: string): string | null {
+    try {
+      const value = JSON.parse(
+        Buffer.from(token.split(".")[1], "base64url").toString(),
+      ).app_metadata?.staff_password_nonce;
+      return typeof value === "string" ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  function tokenSession(token: string): string | null {
+    try {
+      const id = JSON.parse(
+        Buffer.from(token.split(".")[1], "base64url").toString(),
+      ).session_id;
+      return typeof id === "string" ? id : null;
+    } catch {
+      return null;
+    }
+  }
+  async function verifiedSession(req: Request) {
+    const token = req.headers
+      .get("authorization")
+      ?.match(/^Bearer (\S+)$/)?.[1];
+    if (!token) throw new ApiError(401, "Potrebna je prijava.");
+    const result = await admin.auth.getUser(token);
+    if (result.error || !result.data.user)
+      throw new ApiError(401, "Potrebna je prijava.");
+    const nonce = tokenNonce(token);
+    const state = await admin.rpc("staff_access_state", {
+      p_id: result.data.user.id,
+      p_nonce: nonce,
+      p_session: tokenSession(token),
+    });
+    checked(state);
+    if (state.data === "inactive") throw new ApiError(403, "Račun ni aktiven.");
+    if (state.data === "stale")
+      throw new ApiError(
+        401,
+        "Seja je zastarela. Ponovno se prijavite z veljavnim geslom.",
+      );
+    return {
+      user: result.data.user,
+      nonce,
+      sessionId: tokenSession(token),
+      state: state.data,
+    };
+  }
   async function requireAdmin(req: Request) {
     const token = req.headers
       .get("authorization")
@@ -113,13 +162,14 @@ export function createApi({
       throw new ApiError(401, "Potrebna je prijava.");
     const profile = await admin
       .from("profiles")
-      .select("role,is_active")
+      .select("role,is_active,must_change_password")
       .eq("id", user.data.user.id)
       .maybeSingle();
     if (
       profile.error ||
       profile.data?.role !== "administrator" ||
-      !profile.data.is_active
+      !profile.data.is_active ||
+      profile.data.must_change_password
     )
       throw new ApiError(
         403,
@@ -199,7 +249,7 @@ export function createApi({
         if (result.data.session) {
           const profile = await admin
             .from("profiles")
-            .select("role,is_active")
+            .select("role,is_active,must_change_password")
             .eq("id", result.data.session.user.id)
             .maybeSingle();
           active =
@@ -214,9 +264,109 @@ export function createApi({
           if (result.data.session) await auth.auth.signOut({ scope: "local" });
           throw new ApiError(401, loginError);
         }
+        const access = await admin.rpc("staff_access_state", {
+          p_id: result.data.session.user.id,
+          p_nonce: tokenNonce(result.data.session.access_token),
+          p_session: tokenSession(result.data.session.access_token),
+        });
+        checked(access);
+        if (!["ready", "pending"].includes(access.data)) {
+          await auth.auth.signOut({ scope: "local" });
+          throw new ApiError(401, loginError);
+        }
         return json({
+          must_change_password: access.data === "pending",
           access_token: result.data.session.access_token,
           refresh_token: result.data.session.refresh_token,
+        });
+      }),
+    passwordStatus: (req: Request) =>
+      endpoint(async () => {
+        const session = await verifiedSession(req);
+        return json({ must_change_password: session.state === "pending" });
+      }),
+    changeInitialPassword: (req: Request) =>
+      endpoint(async () => {
+        sameOrigin(req, appOrigin);
+        const session = await verifiedSession(req);
+        if (session.state !== "pending")
+          throw new ApiError(409, "Obvezna sprememba gesla ni potrebna.");
+        const data = await body(req),
+          next = password(data.password);
+        if (next !== data.confirmation)
+          throw new ApiError(400, "Gesli se ne ujemata.");
+        const rate = await admin.rpc("take_login_attempt", {
+          p_bucket: createHmac("sha256", rateSecret)
+            .update("password-change:" + session.user.id)
+            .digest("hex"),
+          p_limit: 10,
+          p_seconds: 900,
+        });
+        checked(rate);
+        if (!rate.data)
+          throw new ApiError(429, "Preveč poskusov. Poskusite čez 15 minut.");
+        if (!session.user.email)
+          throw new ApiError(400, "Račun nima veljavne prijavne identitete.");
+        const reuse = await auth.auth.signInWithPassword({
+          email: session.user.email,
+          password: next,
+        });
+        if (reuse.data.session) {
+          await auth.auth.signOut({ scope: "local" });
+          throw new ApiError(
+            400,
+            "Novo geslo mora biti drugačno od začetnega oziroma trenutnega gesla.",
+          );
+        }
+        if (reuse.error?.code !== "invalid_credentials")
+          throw new ApiError(
+            503,
+            "Preverjanje gesla ni uspelo. Poskusite znova.",
+          );
+        const permit = await admin.rpc("begin_staff_password_change", {
+          p_id: session.user.id,
+          p_nonce: session.nonce,
+          p_session: session.sessionId,
+        });
+        checked(permit);
+        const updated = await admin.auth.admin.updateUserById(session.user.id, {
+          password: next,
+          app_metadata: {
+            ...session.user.app_metadata,
+            staff_password_nonce: permit.data,
+          },
+        });
+        if (updated.error)
+          throw new ApiError(
+            502,
+            "Gesla ni bilo mogoče spremeniti. Poskusite znova.",
+          );
+        // A fresh session carries the new credential epoch. Old signed JWTs stay blocked by RLS.
+        const fresh = await auth.auth.signInWithPassword({
+          email: session.user.email,
+          password: next,
+        });
+        if (fresh.error || !fresh.data.session)
+          throw new ApiError(
+            409,
+            "Geslo je spremenjeno. Ponovno se prijavite z novim geslom.",
+          );
+        const access = await admin.rpc("staff_access_state", {
+          p_id: session.user.id,
+          p_nonce: tokenNonce(fresh.data.session.access_token),
+          p_session: tokenSession(fresh.data.session.access_token),
+        });
+        checked(access);
+        if (access.data !== "ready") {
+          await auth.auth.signOut({ scope: "local" });
+          throw new ApiError(
+            409,
+            "Sprememba ni zaključena ali je bila sprožena nova ponastavitev. Ponovno se prijavite.",
+          );
+        }
+        return json({
+          access_token: fresh.data.session.access_token,
+          refresh_token: fresh.data.session.refresh_token,
         });
       }),
     list: (req: Request) =>
@@ -263,7 +413,10 @@ export function createApi({
           email: email || `kd-${randomUUID()}@accounts.invalid`,
           password: initial,
           email_confirm: true,
-          app_metadata: { managed_staff: true },
+          app_metadata: {
+            managed_staff: true,
+            staff_password_nonce: randomUUID(),
+          },
         });
         if (created.error || !created.data.user)
           throw new ApiError(
@@ -358,8 +511,19 @@ export function createApi({
           const next = password(data.password);
           if (data.confirmation !== next)
             throw new ApiError(400, "Gesli se ne ujemata.");
+          const identity = await admin.auth.admin.getUserById(id);
+          if (identity.error || !identity.data.user)
+            throw new ApiError(404, "Prijavni račun ne obstaja.");
+          const permit = await admin.rpc("begin_staff_password_reset", {
+            p_id: id,
+          });
+          checked(permit);
           const result = await admin.auth.admin.updateUserById(id, {
             password: next,
+            app_metadata: {
+              ...identity.data.user.app_metadata,
+              staff_password_nonce: permit.data,
+            },
           });
           if (result.error)
             throw new ApiError(

@@ -20,7 +20,9 @@ export async function database() {
   const db = new PGlite();
   await db.exec(`create role anon; create role authenticated;
  create schema auth; create schema storage;
- create table auth.users(id uuid primary key);
+ create table auth.users(id uuid primary key, encrypted_password text not null default 'legacy-hash', raw_app_meta_data jsonb not null default '{}');
+ create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id) on delete cascade,created_at timestamptz not null default clock_timestamp());
+ create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  grant usage on schema public,auth,storage to authenticated,anon;
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
@@ -55,10 +57,14 @@ export async function database() {
   await db.exec(
     "grant all on all tables in schema public,auth,storage to service_role;",
   );
+  await migrate(db, "202610210001_first_password_change.sql");
   return db;
 }
-export async function asUser(db, id) {
+export async function asUser(db, id, claims = { sub: id, app_metadata: {} }) {
   await db.exec("reset role");
   await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
+  await db.query("select set_config('request.jwt.claims',$1,false)", [
+    JSON.stringify(claims),
+  ]);
   await db.exec("set role authenticated");
 }

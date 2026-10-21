@@ -63,6 +63,14 @@ test("administrator creates, edits, resets and deactivates a username account wi
   await dialog.getByRole("button", { name: "Nastavi začasno geslo" }).click();
   await expect(dialog).not.toBeVisible();
   await login(page, "nov.sodelavec", "changed-password-123");
+  await expect(page).toHaveURL(/nastavi-geslo/);
+  await page
+    .getByLabel("Novo geslo", { exact: true })
+    .fill("personal-password-123");
+  await page
+    .getByLabel("Potrditev novega gesla", { exact: true })
+    .fill("personal-password-123");
+  await page.getByRole("button", { name: "Shrani novo geslo" }).click();
   await expect(page.locator(".user strong")).toHaveText("Nov Tehnik");
   await expect(
     page.getByRole("link", { name: "Osebje", exact: true }),
@@ -103,7 +111,7 @@ test("administrator creates, edits, resets and deactivates a username account wi
   page.once("dialog", (d) => d.accept());
   await person.getByRole("button", { name: "Deaktiviraj" }).click();
   await expect(person).toContainText("Deaktiviran");
-  await login(page, "nov.sodelavec", "changed-password-123");
+  await login(page, "nov.sodelavec", "personal-password-123");
   await expect(page.getByRole("status")).toContainText("Prijava ni uspela.");
 });
 test("hostess username login preserves read-only assignments and denies staff administration", async ({

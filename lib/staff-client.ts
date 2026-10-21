@@ -6,8 +6,7 @@ export async function staffRequest(
 ) {
   if (!supabase) throw new Error("Povezava Supabase ni nastavljena.");
   const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session)
-    throw new Error("Za dostop se prijavite kot administrator.");
+  if (error || !data.session) throw new Error("Za nadaljevanje se prijavite.");
   const response = await fetch(path, {
     method,
     cache: "no-store",

@@ -4,7 +4,18 @@ import { randomUUID } from "node:crypto";
 import { createApi } from "../../lib/server/api.ts";
 import { database, asUser, ids } from "./database.mjs";
 const columns = {
-  profiles: ["id", "full_name", "role", "is_active"],
+  staff_password_state: [
+    "user_id",
+    "required_nonce",
+    "version",
+    "completion_nonce",
+    "completion_version",
+    "expires_at",
+    "reset_pending",
+    "reset_nonce",
+    "session_after",
+  ],
+  profiles: ["id", "full_name", "role", "is_active", "must_change_password"],
   events: [
     "id",
     "title",
@@ -29,6 +40,9 @@ const columns = {
   auth_attempts: ["bucket", "window_started", "attempts"],
 };
 const rpcArgs = {
+  staff_access_state: ["p_id", "p_nonce", "p_session"],
+  begin_staff_password_change: ["p_id", "p_nonce", "p_session"],
+  begin_staff_password_reset: ["p_id"],
   create_staff_profile: [
     "p_id",
     "p_username",
@@ -46,7 +60,7 @@ const rpcArgs = {
   set_staff_active: ["p_id", "p_active"],
   take_login_attempt: ["p_bucket", "p_limit", "p_seconds"],
 };
-export function token(id) {
+export function token(id, metadata = {}, sessionId) {
   return (
     Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString(
       "base64url",
@@ -55,6 +69,8 @@ export function token(id) {
     Buffer.from(
       JSON.stringify({
         sub: id,
+        app_metadata: metadata,
+        session_id: sessionId,
         exp: 4102444800,
         aud: "authenticated",
         role: "authenticated",
@@ -63,6 +79,13 @@ export function token(id) {
     ".dGVzdC1vbmx5LXNpZ25hdHVyZQ"
   );
 }
+export const claims = (jwt) => {
+  try {
+    return JSON.parse(Buffer.from(jwt.split(".")[1], "base64url"));
+  } catch {
+    return {};
+  }
+};
 const subject = (jwt) => {
   try {
     return JSON.parse(Buffer.from(jwt.split(".")[1], "base64url")).sub;
@@ -93,7 +116,10 @@ export async function serverFixture({
   const json = (value, status = 200) =>
     new Response(JSON.stringify(value), {
       status,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Supabase-Api-Version": "2024-01-01",
+      },
     });
   const fetchMock = async (input, init) => {
     const req = new Request(input, init),
@@ -124,8 +150,14 @@ export async function serverFixture({
                 },
                 400,
               );
+            await db.exec("reset role");
+            const sessionId = randomUUID();
+            await db.query(
+              "insert into auth.sessions(id,user_id) values ($1,$2)",
+              [sessionId, user.id],
+            );
             return json({
-              access_token: token(user.id),
+              access_token: token(user.id, user.app_metadata, sessionId),
               refresh_token: `refresh-${user.id}`,
               expires_in: 3600,
               expires_at: 4102444800,
@@ -135,6 +167,18 @@ export async function serverFixture({
           }
           if (url.pathname.endsWith("/user")) {
             const user = users.get(subject(bearer || ""));
+            if (user && !user.banned && req.method === "PUT") {
+              if (body.password) {
+                await db.exec("reset role");
+                await db.query(
+                  "update auth.users set encrypted_password=$2 where id=$1",
+                  [user.id, "test-hash-" + randomUUID()],
+                );
+                passwords.set(user.id, body.password);
+              }
+              if (body.data)
+                user.user_metadata = { ...user.user_metadata, ...body.data };
+            }
             return user && !user.banned
               ? json(user)
               : json({ msg: "Invalid JWT" }, 401);
@@ -160,7 +204,10 @@ export async function serverFixture({
                 app_metadata: body.app_metadata ?? {},
               };
             await db.exec("reset role");
-            await db.query("insert into auth.users values ($1)", [id]);
+            await db.query(
+              "insert into auth.users(id,raw_app_meta_data) values ($1,$2)",
+              [id, JSON.stringify(user.app_metadata)],
+            );
             users.set(id, user);
             passwords.set(id, body.password);
             return json(user);
@@ -181,14 +228,35 @@ export async function serverFixture({
               if (faults.ban) return json({ msg: "Auth unavailable" }, 500);
               user.banned = body.ban_duration !== "none";
             }
-            if (body.password) passwords.set(id, body.password);
+            if (body.password || body.app_metadata) {
+              if (faults.password)
+                return json({ msg: "Password update unavailable" }, 400);
+              await db.exec("reset role");
+              const metadata = { ...user.app_metadata, ...body.app_metadata };
+              // Match GoTrue AdminUserUpdate: password first, metadata second,
+              // with deferred database constraints checked at the same commit.
+              await db.transaction(async (tx) => {
+                if (body.password)
+                  await tx.query(
+                    "update auth.users set encrypted_password=$2 where id=$1",
+                    [id, "test-hash-" + randomUUID()],
+                  );
+                if (body.app_metadata)
+                  await tx.query(
+                    "update auth.users set raw_app_meta_data=$2 where id=$1",
+                    [id, JSON.stringify(metadata)],
+                  );
+              });
+              user.app_metadata = metadata;
+              if (body.password) passwords.set(id, body.password);
+            }
             return json(user);
           }
           return json(user);
         }
         const id = subject(bearer || "");
         if (service) await db.exec("reset role; set role service_role");
-        else if (id && users.has(id)) await asUser(db, id);
+        else if (id && users.has(id)) await asUser(db, id, claims(bearer));
         else await db.exec("reset role; set role anon");
         if (url.pathname.includes("/rpc/")) {
           const name = url.pathname.split("/").at(-1),

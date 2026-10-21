@@ -11,6 +11,7 @@ export type Profile = {
   full_name: string;
   role: Role;
   is_active: boolean;
+  must_change_password: boolean;
 };
 export type Event = {
   id: string;

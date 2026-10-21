@@ -250,3 +250,11 @@ in RLS po deaktivaciji tudi ob napaki Auth. Brskalniški testi na računalniške
 uporabijo iste strežniške obdelovalce in vse migracije v PGlite; samo oddaljeni Auth je testno emuliran.
 V produkcijo ne dodajajo testnih računov. Pred uporabo še preverite dejansko ustvarjanje računa,
 prijavo z uporabniškim imenom ter dostavo obnovitvenega e-sporočila v svojem testnem Supabase projektu.
+
+## Obvezna sprememba začetnega gesla (issue #7)
+
+Za to nadgradnjo izvedite samo novo migracijo
+[`202610210001_first_password_change.sql`](supabase/migrations/202610210001_first_password_change.sql)
+in nato objavite novo različico. Obstoječih računov ne ustvarjajte ponovno;
+administratorji in računi brez oznake ohranijo svoja gesla.
+[Navodila za izvedbo in preverjanje](docs/first-password-change.md).
