@@ -258,3 +258,12 @@ Za to nadgradnjo izvedite samo novo migracijo
 in nato objavite novo različico. Obstoječih računov ne ustvarjajte ponovno;
 administratorji in računi brez oznake ohranijo svoja gesla.
 [Navodila za izvedbo in preverjanje](docs/first-password-change.md).
+
+## Osebne oznake na koledarju (issue #9)
+
+Tehnik in hostesa vidita svoje razporejene dogodke zeleno z oznako **Delam**;
+ostali dogodki ostanejo sivi. Enako velja za Moj razpored in seznam naslednjih
+dogodkov. Administratorske barve lokacij ostanejo nespremenjene. Lastne spremembe
+razporeda se osvežijo takoj, spremembe v drugem odjemalcu ob vrnitvi v zavihek
+in vsakih 30 sekund v vidnem zavihku. Dodatna SQL migracija, Realtime ali nove
+Vercel nastavitve niso potrebni; podatki se še vedno berejo z uporabnikovo sejo prek RLS.
