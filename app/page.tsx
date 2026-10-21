@@ -157,6 +157,21 @@ export default function Home() {
   useEffect(() => {
     if (sessionId) void load(sessionId);
   }, [sessionId, load]);
+  // Refresh remote staffing changes without requiring Supabase Realtime setup.
+  useEffect(() => {
+    if (!sessionId) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void load(sessionId);
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 30_000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.clearInterval(timer);
+    };
+  }, [sessionId, load]);
   async function login(form: FormData) {
     if (!supabase) return;
     setBusy(true);
@@ -254,6 +269,21 @@ export default function Home() {
     }
     setBusy(false);
   }
+  const personalCalendar =
+    profile?.role === "tehnik" || profile?.role === "hostesa";
+  const workingEvents = new Set(
+    personalCalendar
+      ? assignments
+          .filter((a) => a.user_id === sessionId)
+          .map((a) => a.event_id)
+      : [],
+  );
+  const eventStyle = (event: Event) =>
+    personalCalendar
+      ? workingEvents.has(event.id)
+        ? "is-working"
+        : "is-neutral"
+      : `color-${locations.indexOf(event.location)}`;
   const filtered = events.filter(
     (e) =>
       (location === "Vse lokacije" || e.location === location) &&
@@ -573,12 +603,25 @@ export default function Home() {
                 </select>
               </div>
               <div className="legend">
-                {locations.map((l, i) => (
-                  <span key={l}>
-                    <i className={`dot color-${i}`} />
-                    {l}
-                  </span>
-                ))}
+                {personalCalendar ? (
+                  <>
+                    <span>
+                      <i className="dot working-dot" />
+                      Delam
+                    </span>
+                    <span>
+                      <i className="dot neutral-dot" />
+                      Ostali dogodki
+                    </span>
+                  </>
+                ) : (
+                  locations.map((l, i) => (
+                    <span key={l}>
+                      <i className={`dot color-${i}`} />
+                      {l}
+                    </span>
+                  ))
+                )}
               </div>
               <div className="calendar-grid">
                 {["Pon", "Tor", "Sre", "Čet", "Pet", "Sob", "Ned"].map((d) => (
@@ -615,10 +658,10 @@ export default function Home() {
                             )
                             .map((e) => (
                               <button
-                                className={`event color-${locations.indexOf(e.location)}`}
+                                className={`event ${eventStyle(e)}`}
                                 key={e.id}
                                 type="button"
-                                aria-label={`Odpri dogodek: ${e.title}`}
+                                aria-label={`Odpri dogodek: ${e.title}${workingEvents.has(e.id) ? " – Delam" : ""}`}
                                 onClick={() => openEvent(e)}
                               >
                                 <small>
@@ -628,6 +671,9 @@ export default function Home() {
                                   )}
                                 </small>
                                 <strong>{e.title}</strong>
+                                {workingEvents.has(e.id) && (
+                                  <span className="working-label">Delam</span>
+                                )}
                               </button>
                             ))}
                       </div>
@@ -660,7 +706,7 @@ export default function Home() {
                 .slice(0, 5)
                 .map((e) => (
                   <button
-                    className="event-row"
+                    className={`event-row ${personalCalendar ? eventStyle(e) : ""}`}
                     key={e.id}
                     type="button"
                     onClick={() => openEvent(e)}
@@ -675,6 +721,9 @@ export default function Home() {
                     </div>
                     <div>
                       <h3>{e.title}</h3>
+                      {workingEvents.has(e.id) && (
+                        <span className="working-label">Delam</span>
+                      )}
                       <p>
                         <MapPin size={14} />
                         {e.location} <Clock size={14} />

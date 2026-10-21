@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { backend } from "./backend.mjs";
+import { ids } from "../helpers/database.mjs";
 let data;
 test.beforeEach(async ({ page }) => {
   data = await backend(page);
@@ -180,6 +181,8 @@ test("technician self-signup edits only own hours and can cancel", async ({
 }) => {
   await login(page, "tech");
   let dialog = await open(page);
+  const calendarEvent = page.locator(".calendar-grid .event");
+  await expect(calendarEvent).toHaveClass(/is-neutral/);
   await expect(
     dialog.getByRole("form", { name: "Dodaj člana ekipe" }),
   ).toHaveCount(0);
@@ -195,14 +198,19 @@ test("technician self-signup edits only own hours and can cancel", async ({
   await expect(
     dialog.getByRole("article", { name: "Rok Tehnik" }).getByRole("button"),
   ).toHaveCount(0);
+  await expect(calendarEvent).toHaveClass(/is-working/);
+  await expect(calendarEvent).toContainText("Delam");
   await page.reload();
   dialog = await open(page);
+  await expect(calendarEvent).toHaveClass(/is-working/);
   const own = dialog.getByRole("article", { name: "Tine Tehnik" });
   await times(own, "2026-11-12T15:30", "2026-11-13T00:30");
   await own.getByRole("button", { name: "Shrani ure" }).click();
   await expect(dialog.getByRole("status")).toHaveText("Razpored je shranjen.");
   await own.getByRole("button", { name: "Odjavi se" }).click();
   await expect(own).toHaveCount(0);
+  await expect(calendarEvent).toHaveClass(/is-neutral/);
+  await expect(calendarEvent).not.toContainText("Delam");
   await expect(
     dialog.getByRole("form", { name: "Samoprijava tehnika" }),
   ).toBeVisible();
@@ -265,3 +273,81 @@ test("calendar remains interactive when the browser date differs from prerenderi
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+for (const role of ["tech", "hostess", "admin"])
+  test(`${role}: personal calendar marks only own assignments and refreshes administrator changes`, async ({
+    page,
+  }, testInfo) => {
+    await data.db.exec("reset role");
+    const userId = role === "hostess" ? ids.hostess : ids.tech;
+    await data.db.query(
+      "insert into assignments(event_id,user_id,arrives_at,finishes_at) select id,$2,starts_at,ends_at from events where id=$1",
+      [ids.event, userId],
+    );
+    await data.db.query(
+      "insert into events(id,title,starts_at,ends_at,location,accounting_code) select $1,'Drug dogodek',starts_at,ends_at,'Druga lokacija','110' from events where id=$2",
+      ["10000000-0000-0000-0000-000000000002", ids.event],
+    );
+    await page.clock.install();
+    await login(page, role);
+    await goToEventMonth(page);
+    const assigned = page
+      .locator(".calendar-grid .event")
+      .filter({ hasText: "Preizkusni koncert" });
+    const other = page
+      .locator(".calendar-grid .event")
+      .filter({ hasText: "Drug dogodek" });
+    await expect(other).toBeVisible();
+    if (role === "admin") {
+      await expect(assigned).toHaveClass(/color-0/);
+      await expect(other).toHaveClass(/color-2/);
+      await expect(page.locator(".working-label")).toHaveCount(0);
+      return;
+    }
+    await expect(assigned).toHaveClass(/is-working/);
+    await expect(assigned).toHaveAccessibleName(
+      "Odpri dogodek: Preizkusni koncert – Delam",
+    );
+    await expect(assigned).toContainText("Delam");
+    await expect(other).toHaveClass(/is-neutral/);
+    await expect(other).not.toContainText("Delam");
+    await expect(
+      page.locator(".event-row").filter({ hasText: "Preizkusni koncert" }),
+    ).toHaveClass(/is-working/);
+    await page
+      .getByRole("button", { name: "Moj razpored", exact: true })
+      .click();
+    await expect(assigned).toHaveClass(/is-working/);
+    await expect(other).toHaveCount(0);
+    await page.getByRole("button", { name: "Koledar", exact: true }).click();
+    await expect(other).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath("personal-calendar.png"),
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    // Simulate an administrator changing staffing in another client.
+    await data.db.exec("reset role");
+    await data.db.query(
+      "delete from assignments where event_id=$1 and user_id=$2",
+      [ids.event, userId],
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(assigned).toHaveClass(/is-neutral/);
+    await expect(assigned).not.toContainText("Delam");
+    // The other technician is still assigned: the colour is personal, not global.
+    await expect(assigned).toBeVisible();
+    await data.db.exec("reset role");
+    await data.db.query(
+      "insert into assignments(event_id,user_id,arrives_at,finishes_at) select id,$2,starts_at,ends_at from events where id=$1",
+      [ids.event, userId],
+    );
+    await page.clock.fastForward(30_000);
+    await expect(assigned).toHaveClass(/is-working/);
+    await page.reload();
+    await goToEventMonth(page);
+    await expect(assigned).toHaveClass(/is-working/);
+  });

@@ -1128,3 +1128,38 @@ nav .nav {
     margin-left: auto;
   }
 }
+
+/* Personal staffing status: text as well as colour; location colours stay admin-only. */
+.event.is-neutral,
+.event-row.is-neutral {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+}
+.event.is-working,
+.event-row.is-working {
+  background: #dcfce7;
+  color: #14532d;
+  border-color: #15803d;
+}
+.working-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.dot.working-dot {
+  background: #15803d;
+}
+.dot.neutral-dot {
+  background: #6b7280;
+}
+.event-row.is-neutral .date-tile {
+  background: #e5e7eb;
+  color: #374151;
+}
+.event-row.is-working .date-tile {
+  background: #bbf7d0;
+  color: #14532d;
+}
