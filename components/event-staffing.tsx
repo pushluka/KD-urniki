@@ -7,6 +7,7 @@ import {
   type ExternalAssignment,
   type Profile,
 } from "@/lib/supabase";
+import { staffRequest } from "@/lib/staff-client";
 import { assignmentTimes, localDateTime } from "@/lib/staffing";
 const timeLabel = (value: string) =>
   new Date(value).toLocaleString("sl-SI", {
@@ -78,6 +79,9 @@ export function EventStaffing({
     try {
       const result = await action();
       if (result.error) throw new Error(result.error.message);
+      // The database outbox is already committed. Delivery failure cannot undo staffing.
+      if (admin)
+        void staffRequest("/api/push/dispatch", "POST").catch(() => {});
       await onSaved();
       setStatus("Razpored je shranjen.");
     } catch (e) {

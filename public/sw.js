@@ -28,6 +28,8 @@ self.addEventListener("activate", (event) => {
 });
 self.addEventListener("message", (event) => {
   if (event.data?.type === "ACTIVATE_UPDATE") self.skipWaiting();
+  if (event.data?.type === "PUSH_CAPABILITIES")
+    event.ports?.[0]?.postMessage({ push: true });
 });
 self.addEventListener("fetch", (event) => {
   // Network-only, including cross-origin Supabase, signed PDF URLs and RSC.
@@ -48,6 +50,63 @@ self.addEventListener("fetch", (event) => {
         }
         throw error;
       }
+    })(),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(
+    (async () => {
+      let data;
+      try {
+        data = event.data?.json();
+      } catch {
+        return;
+      }
+      const uuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (
+        !data ||
+        !uuid.test(data.eventId) ||
+        !uuid.test(data.recipientId) ||
+        !uuid.test(data.notificationId)
+      )
+        return;
+      const url = `/?dogodek=${data.eventId}&prejemnik=${data.recipientId}`;
+      await self.registration.showNotification("KD Urniki", {
+        body:
+          typeof data.body === "string"
+            ? data.body.slice(0, 180)
+            : "Vaš razpored je spremenjen. Odprite aplikacijo.",
+        icon: "/icons/icon-192.png",
+        tag: `kd-${data.notificationId}`,
+        renotify: false,
+        data: { url },
+      });
+    })(),
+  );
+});
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    (async () => {
+      const target = new URL(
+        event.notification.data?.url ?? "/",
+        self.location.origin,
+      );
+      // Never open a URL supplied by an arbitrary notification payload/provider.
+      if (target.origin !== self.location.origin || target.pathname !== "/")
+        return;
+      const windows = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      const existing = windows.find((client) => client.url === target.href);
+      // Reuse only the exact target; do not navigate an open unsaved form.
+      if (existing) {
+        existing.postMessage({ type: "OPEN_PUSH_EVENT", url: target.href });
+        await existing.focus();
+      } else await self.clients.openWindow(target.href);
     })(),
   );
 });

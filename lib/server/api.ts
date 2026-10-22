@@ -2,7 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 export const loginError =
   "Prijava ni uspela. Preverite uporabniško ime oziroma e-pošto in geslo.";
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
     super(message);
@@ -30,12 +30,12 @@ export async function endpoint(action: () => Promise<Response>) {
     );
   }
 }
-function sameOrigin(req: Request, publicOrigin: string) {
+export function sameOrigin(req: Request, publicOrigin: string) {
   // Next/Vercel can expose an internal request URL; trust only the configured public origin.
   if (req.headers.get("origin") !== new URL(publicOrigin).origin)
     throw new ApiError(403, "Nedovoljen izvor zahteve.");
 }
-async function body(req: Request) {
+export async function body(req: Request) {
   if (!req.headers.get("content-type")?.startsWith("application/json"))
     throw new ApiError(415, "Zahtevani so podatki JSON.");
   if (Number(req.headers.get("content-length")) > 8192)
@@ -189,6 +189,20 @@ export function createApi({
     return result.data;
   }
   return {
+    authorizePush: async (req: Request, write = false) => {
+      if (write) sameOrigin(req, appOrigin);
+      const session = await verifiedSession(req);
+      if (session.state !== "ready")
+        throw new ApiError(403, "Najprej spremenite začetno geslo.");
+      const result = await admin
+        .from("profiles")
+        .select("role,is_active")
+        .eq("id", session.user.id)
+        .single();
+      if (result.error || !result.data?.is_active)
+        throw new ApiError(403, "Dostop ni dovoljen.");
+      return { id: session.user.id, role: result.data.role as string };
+    },
     login: (req: Request) =>
       endpoint(async () => {
         sameOrigin(req, appOrigin);
