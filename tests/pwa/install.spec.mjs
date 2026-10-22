@@ -58,6 +58,20 @@ test("real worker never caches private responses; offline navigation has only a 
   request,
 }) => {
   await controlled(page);
+  const supportsPush = await page.evaluate(async () => {
+    const r = await navigator.serviceWorker.ready;
+    return new Promise((resolve) => {
+      const channel = new MessageChannel();
+      const timeout = setTimeout(() => resolve(false), 2000);
+      channel.port1.onmessage = (e) => {
+        clearTimeout(timeout);
+        channel.port1.close();
+        resolve(e.data?.push === true);
+      };
+      r.active.postMessage({ type: "PUSH_CAPABILITIES" }, [channel.port2]);
+    });
+  });
+  expect(supportsPush).toBe(true);
   const response = await request.get("/sw.js");
   expect(response.headers()["cache-control"]).toContain("no-store");
   await page.evaluate(async () => {

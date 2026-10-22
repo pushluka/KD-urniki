@@ -273,3 +273,9 @@ Vercel nastavitve niso potrebni; podatki se še vedno berejo z uporabnikovo sejo
 Navodila za uporabnike so v aplikaciji na `/namestitev`. Za podatke je potrebna
 internetna povezava; PWA shrani samo javno obvestilo za nedosegljivo omrežje.
 [Objava, varnost predpomnjenja in preverjanje PWA](docs/pwa.md).
+
+## Potisna obvestila (issue #13)
+
+Pred objavo izvedite novo migracijo `supabase/migrations/202610220001_web_push.sql`.
+Nastavite VAPID in periodično dostavo; [celotna navodila za Vercel, varnost in preverjanje](docs/web-push.md).
+Tehniki in hostese obvestila za svoje naprave prostovoljno upravljajo v **Nastavitvah**.

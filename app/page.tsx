@@ -5,7 +5,7 @@ import { EventDialog } from "@/components/event-dialog";
 import { EventStaffing } from "@/components/event-staffing";
 import { localDateTime as localInput } from "@/lib/staffing";
 import { isRecoveryLink, recoveryPath } from "@/lib/recovery";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   CalendarDays,
   Users,
@@ -284,6 +284,47 @@ export default function Home() {
         ? "is-working"
         : "is-neutral"
       : `color-${locations.indexOf(event.location)}`;
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const receive = (event: MessageEvent) => {
+      if (event.data?.type !== "OPEN_PUSH_EVENT") return;
+      // Same-origin worker messages only. Ask before leaving an editable dialog.
+      if (
+        creating &&
+        !window.confirm("Odpreti obvestilo? Neshranjeni vnos bo izgubljen.")
+      )
+        return;
+      const target = new URL(event.data.url, window.location.origin);
+      if (target.origin === window.location.origin && target.pathname === "/")
+        window.location.assign(target.href);
+    };
+    navigator.serviceWorker.addEventListener("message", receive);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", receive);
+  }, [creating]);
+  const pushLinkHandled = useRef("");
+  useEffect(() => {
+    if (!profile || loading || !accessChecked) return;
+    const params = new URLSearchParams(window.location.search),
+      id = params.get("dogodek"),
+      recipient = params.get("prejemnik");
+    if (
+      !id ||
+      !/^[0-9a-f-]{36}$/i.test(id) ||
+      pushLinkHandled.current === id + sessionId
+    )
+      return;
+    pushLinkHandled.current = id + sessionId;
+    if (recipient && recipient !== sessionId) {
+      setMessage(
+        "Obvestilo je namenjeno drugemu računu. Prijavite se z ustreznim računom.",
+      );
+      return;
+    }
+    const event = events.find((e) => e.id === id);
+    if (event) setSelectedId(event.id);
+    else setMessage("Dogodek ni več na voljo oziroma nimate dostopa.");
+  }, [profile, loading, accessChecked, events, sessionId]);
   const filtered = events.filter(
     (e) =>
       (location === "Vse lokacije" || e.location === location) &&
@@ -342,6 +383,12 @@ export default function Home() {
               {view === name && <span className="nav-dot" />}
             </button>
           ))}
+          {profile && profile.role !== "administrator" && (
+            <Link className="nav" href="/nastavitve">
+              <Settings size={19} />
+              Nastavitve
+            </Link>
+          )}
           {admin && (
             <Link className="nav" href="/osebje">
               <Users size={19} />

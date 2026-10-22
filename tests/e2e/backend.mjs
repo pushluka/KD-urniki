@@ -1,7 +1,19 @@
 // Isolated browser tests: actual server handlers and migrations, emulated Supabase Auth.
+import { createECDH } from "node:crypto";
+import { createPushApi } from "../../lib/server/push.ts";
 import { serverFixture } from "../helpers/server-fixture.mjs";
 export async function backend(page) {
   const fixture = await serverFixture({ appOrigin: "http://localhost:3100" });
+  const vapid = createECDH("prime256v1");
+  vapid.generateKeys();
+  fixture.push = createPushApi({
+    admin: fixture.admin,
+    authorize: fixture.api.authorizePush,
+    origin: "http://localhost:3100",
+    publicKey: vapid.getPublicKey().toString("base64url"),
+    cronSecret: "test-cron",
+    send: async () => {},
+  });
   async function fulfill(route, res) {
     await route.fulfill({
       status: res.status,
@@ -27,7 +39,15 @@ export async function backend(page) {
       url = new URL(req.url),
       api = fixture.api;
     let res;
-    if (url.pathname === "/api/auth/password-status")
+    if (url.pathname === "/api/push/subscription")
+      res = await (req.method === "GET"
+        ? fixture.push.status(req)
+        : req.method === "POST"
+          ? fixture.push.subscribe(req)
+          : fixture.push.unsubscribe(req));
+    else if (url.pathname === "/api/push/dispatch")
+      res = await fixture.push.dispatch(req);
+    else if (url.pathname === "/api/auth/password-status")
       res = await api.passwordStatus(req);
     else if (url.pathname === "/api/auth/change-initial-password")
       res = await api.changeInitialPassword(req);

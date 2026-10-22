@@ -58,6 +58,7 @@ export async function database() {
     "grant all on all tables in schema public,auth,storage to service_role;",
   );
   await migrate(db, "202610210001_first_password_change.sql");
+  await migrate(db, "202610220001_web_push.sql");
   return db;
 }
 export async function asUser(db, id, claims = { sub: id, app_metadata: {} }) {

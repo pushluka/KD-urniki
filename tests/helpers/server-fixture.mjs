@@ -4,6 +4,31 @@ import { randomUUID } from "node:crypto";
 import { createApi } from "../../lib/server/api.ts";
 import { database, asUser, ids } from "./database.mjs";
 const columns = {
+  push_subscriptions: [
+    "id",
+    "user_id",
+    "endpoint_hash",
+    "endpoint",
+    "p256dh",
+    "auth",
+    "vapid_key",
+    "credential_nonce",
+    "created_at",
+  ],
+  push_deliveries: [
+    "id",
+    "user_id",
+    "subscription_id",
+    "event_id",
+    "kind",
+    "created_at",
+    "attempts",
+    "next_attempt_at",
+    "lease_token",
+    "lease_until",
+    "sent_at",
+    "dead_at",
+  ],
   staff_password_state: [
     "user_id",
     "required_nonce",
@@ -40,6 +65,16 @@ const columns = {
   auth_attempts: ["bucket", "window_started", "attempts"],
 };
 const rpcArgs = {
+  register_push: [
+    "p_user",
+    "p_hash",
+    "p_endpoint",
+    "p_p256dh",
+    "p_auth",
+    "p_vapid",
+  ],
+  claim_push: ["p_vapid"],
+  finish_push: ["p_id", "p_lease", "p_status"],
   staff_access_state: ["p_id", "p_nonce", "p_session"],
   begin_staff_password_change: ["p_id", "p_nonce", "p_session"],
   begin_staff_password_reset: ["p_id"],

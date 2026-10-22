@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { PushAccountGuard } from "@/components/push-account-guard";
 import { PwaStatus } from "@/components/pwa-status";
 export const metadata: Metadata = {
   title: "KD Grosuplje – Urniki",
@@ -22,6 +23,7 @@ export default function RootLayout({
       <body>
         {children}
         <PwaStatus />
+        <PushAccountGuard />
       </body>
     </html>
   );
