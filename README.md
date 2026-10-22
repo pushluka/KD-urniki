@@ -267,3 +267,9 @@ dogodkov. Administratorske barve lokacij ostanejo nespremenjene. Lastne sprememb
 razporeda se osvežijo takoj, spremembe v drugem odjemalcu ob vrnitvi v zavihek
 in vsakih 30 sekund v vidnem zavihku. Dodatna SQL migracija, Realtime ali nove
 Vercel nastavitve niso potrebni; podatki se še vedno berejo z uporabnikovo sejo prek RLS.
+
+## Namestitev na Android in iPhone (PWA, issue #11)
+
+Navodila za uporabnike so v aplikaciji na `/namestitev`. Za podatke je potrebna
+internetna povezava; PWA shrani samo javno obvestilo za nedosegljivo omrežje.
+[Objava, varnost predpomnjenja in preverjanje PWA](docs/pwa.md).

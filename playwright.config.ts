@@ -6,6 +6,8 @@ export default defineConfig({
   timeout: 45000,
   reporter: "list",
   use: {
+    // Auth emulation is page-routed; real service-worker coverage uses playwright.pwa.config.ts.
+    serviceWorkers: "block",
     baseURL: "http://localhost:3100",
     timezoneId: "Europe/Ljubljana",
     trace: "retain-on-failure",

@@ -1163,3 +1163,46 @@ nav .nav {
   background: #bbf7d0;
   color: #14532d;
 }
+
+.pwa-tools {
+  padding: 14px 20px;
+  background: #fafaf9;
+  color: #4b5563;
+  font-size: 13px;
+  text-align: center;
+}
+.pwa-tools a {
+  color: #a63d10;
+}
+.pwa-tools span {
+  display: block;
+  margin-top: 8px;
+}
+.pwa-tools button {
+  margin-top: 8px;
+}
+.pwa-offline {
+  position: fixed;
+  z-index: 100;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  margin: 0;
+  background: #fff3cd;
+  color: #573d00;
+  text-align: center;
+}
+.install-guide {
+  max-width: 620px;
+  padding: 28px;
+  line-height: 1.6;
+}
+.install-guide h2 {
+  margin-top: 24px;
+  font-size: 20px;
+}
+.install-guide ol {
+  list-style-type: decimal;
+  padding-left: 22px;
+}
