@@ -321,6 +321,16 @@ export default function Home() {
       );
       return;
     }
+    const notice = params.get("obvestilo");
+    if (
+      profile.role === "administrator" &&
+      notice &&
+      /^[0-9a-f-]{36}$/i.test(notice)
+    )
+      void staffRequest("/api/push/history", "PATCH", {
+        id: notice,
+        read: true,
+      }).catch(() => {});
     const event = events.find((e) => e.id === id);
     if (event) setSelectedId(event.id);
     else setMessage("Dogodek ni več na voljo oziroma nimate dostopa.");
@@ -367,7 +377,7 @@ export default function Home() {
           </span>
         </a>
         <div className="workspace-label">ORGANIZACIJA DELA</div>
-        <nav>
+        <nav className={admin ? "admin-navigation" : undefined}>
           {[
             { name: "Koledar", Icon: CalendarDays },
             { name: "Moj razpored", Icon: LayoutGrid },
@@ -383,10 +393,16 @@ export default function Home() {
               {view === name && <span className="nav-dot" />}
             </button>
           ))}
-          {profile && profile.role !== "administrator" && (
+          {profile && (
             <Link className="nav" href="/nastavitve">
               <Settings size={19} />
               Nastavitve
+            </Link>
+          )}
+          {admin && (
+            <Link className="nav" href="/obvestila">
+              <FileText size={19} />
+              Obvestila
             </Link>
           )}
           {admin && (

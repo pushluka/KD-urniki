@@ -79,4 +79,14 @@ test("worker validates payloads, uses stable tags and opens only same-origin eve
   await w.click(w.notifications[0].data.url);
   assert.equal(w.opened.length, 1);
   assert.equal(w.messages[0].type, "OPEN_PUSH_EVENT");
+  await w.push({
+    eventId: id,
+    recipientId: id,
+    notificationId: id,
+    historyId: id,
+  });
+  assert.equal(
+    w.notifications[1].data.url,
+    `/?dogodek=${id}&prejemnik=${id}&obvestilo=${id}`,
+  );
 });

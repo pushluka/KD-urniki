@@ -279,3 +279,9 @@ internetna povezava; PWA shrani samo javno obvestilo za nedosegljivo omrežje.
 Pred objavo izvedite novo migracijo `supabase/migrations/202610220001_web_push.sql`.
 Nastavite VAPID in periodično dostavo; [celotna navodila za Vercel, varnost in preverjanje](docs/web-push.md).
 Tehniki in hostese obvestila za svoje naprave prostovoljno upravljajo v **Nastavitvah**.
+
+## Administratorska obvestila
+
+Administrator lahko v Nastavitvah vključi push in v zavihku Obvestila pregleda
+svojo 14-dnevno zgodovino. Pred objavo izvedite novo migracijo;
+[navodila za uvedbo, RLS in fizično čiščenje](docs/admin-notifications.md).

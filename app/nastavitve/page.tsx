@@ -17,6 +17,7 @@ async function hash(value: string) {
     .join("");
 }
 export default function PushSettings() {
+  const [role, setRole] = useState("");
   const [key, setKey] = useState<string | null>(null),
     [allowed, setAllowed] = useState(false),
     [ready, setReady] = useState(false),
@@ -46,6 +47,7 @@ export default function PushSettings() {
       .then(async (data) => {
         setAllowed(true);
         setKey(data.public_key);
+        setRole(data.role ?? "");
         if (supported) {
           const r = await navigator.serviceWorker.getRegistration("/"),
             sub = await r?.pushManager.getSubscription();
@@ -158,8 +160,11 @@ export default function PushSettings() {
         <div className="eyebrow">KD GROSUPLJE · URNIKI</div>
         <h1>Nastavitve obvestil</h1>
         <p>
-          Obvestila o vaših razporeditvah so izbirna. Nastavitev velja samo za
-          to napravo in račun. Aplikacijo lahko uporabljate brez obvestil.
+          {role === "administrator"
+            ? "Obvestila o razporeditvah ekipe so izbirna."
+            : "Obvestila o vaših razporeditvah so izbirna."}{" "}
+          Nastavitev velja samo za to napravo in račun. Aplikacijo lahko
+          uporabljate brez obvestil.
         </p>
         {!ready ? (
           <p role="status">Preverjanje nastavitev …</p>

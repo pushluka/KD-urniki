@@ -17,7 +17,11 @@ async function login(page, role = "tech", path = "/") {
   await page.getByLabel("Geslo", { exact: true }).fill("test-password");
   await page.getByRole("button", { name: "Prijava", exact: true }).click();
   await expect(page.locator(".user strong")).toHaveText(
-    role === "tech" ? "Tine Tehnik" : "Hana Hostesa",
+    role === "admin"
+      ? "Ana Administrator"
+      : role === "tech"
+        ? "Tine Tehnik"
+        : "Hana Hostesa",
   );
 }
 test("notification link waits for login and opens the correct event without changing calendar month", async ({
@@ -72,81 +76,82 @@ test("notification settings request no permission on load and remain optional", 
   ).toBeVisible();
 });
 
-test("staff can enable and disable only the current device after an explicit permission gesture", async ({
-  page,
-}) => {
-  const key = createECDH("prime256v1");
-  key.generateKeys();
-  const subscription = {
-    endpoint: "https://fcm.googleapis.com/fcm/send/browser-test",
-    keys: {
-      p256dh: key.getPublicKey().toString("base64url"),
-      auth: randomBytes(16).toString("base64url"),
-    },
-  };
-  await page.addInitScript((data) => {
-    window.permissionCalls = 0;
-    const notification = {
-      permission: "default",
-      requestPermission: async () => {
-        window.permissionCalls++;
-        notification.permission = "granted";
-        return "granted";
+for (const account of ["tech", "admin"])
+  test(`${account} can enable and disable only the current device after an explicit permission gesture`, async ({
+    page,
+  }) => {
+    const key = createECDH("prime256v1");
+    key.generateKeys();
+    const subscription = {
+      endpoint: "https://fcm.googleapis.com/fcm/send/browser-test",
+      keys: {
+        p256dh: key.getPublicKey().toString("base64url"),
+        auth: randomBytes(16).toString("base64url"),
       },
     };
-    Object.defineProperty(window, "Notification", { value: notification });
-    let subscribed = false;
-    const sub = {
-      ...data,
-      options: {},
-      toJSON: () => data,
-      unsubscribe: async () => {
-        subscribed = false;
-        return true;
-      },
-    };
-    const registration = new EventTarget();
-    registration.waiting = null;
-    registration.installing = null;
-    registration.update = async () => {};
-    registration.active = {
-      postMessage: (_, ports) => ports[0].postMessage({ push: true }),
-    };
-    registration.pushManager = {
-      getSubscription: async () => (subscribed ? sub : null),
-      subscribe: async (options) => {
-        if (!options.userVisibleOnly) throw new Error("Opt-in required");
-        subscribed = true;
-        return sub;
-      },
-    };
-    const container = new EventTarget();
-    container.controller = {};
-    container.ready = Promise.resolve(registration);
-    container.register = async () => registration;
-    container.getRegistration = async () => registration;
-    Object.defineProperty(navigator, "serviceWorker", { value: container });
-  }, subscription);
-  await login(page);
-  await page.getByRole("link", { name: "Nastavitve", exact: true }).click();
-  const enable = page.getByRole("button", { name: "Omogoči obvestila" });
-  await expect(enable).toBeEnabled();
-  expect(await page.evaluate(() => window.permissionCalls)).toBe(0);
-  await enable.click();
-  await expect(page.getByRole("status")).toHaveText(
-    "Obvestila so omogočena na tej napravi.",
-  );
-  await expect(enable).toBeDisabled();
-  await data.db.exec("reset role");
-  expect(
-    (await data.db.query("select user_id from push_subscriptions")).rows,
-  ).toEqual([{ user_id: ids.tech }]);
-  await page.getByRole("button", { name: "Izklopi obvestila" }).click();
-  await expect(page.getByRole("status")).toHaveText(
-    "Obvestila so izklopljena na tej napravi.",
-  );
-  await data.db.exec("reset role");
-  expect(
-    (await data.db.query("select id from push_subscriptions")).rows.length,
-  ).toBe(0);
-});
+    await page.addInitScript((data) => {
+      window.permissionCalls = 0;
+      const notification = {
+        permission: "default",
+        requestPermission: async () => {
+          window.permissionCalls++;
+          notification.permission = "granted";
+          return "granted";
+        },
+      };
+      Object.defineProperty(window, "Notification", { value: notification });
+      let subscribed = false;
+      const sub = {
+        ...data,
+        options: {},
+        toJSON: () => data,
+        unsubscribe: async () => {
+          subscribed = false;
+          return true;
+        },
+      };
+      const registration = new EventTarget();
+      registration.waiting = null;
+      registration.installing = null;
+      registration.update = async () => {};
+      registration.active = {
+        postMessage: (_, ports) => ports[0].postMessage({ push: true }),
+      };
+      registration.pushManager = {
+        getSubscription: async () => (subscribed ? sub : null),
+        subscribe: async (options) => {
+          if (!options.userVisibleOnly) throw new Error("Opt-in required");
+          subscribed = true;
+          return sub;
+        },
+      };
+      const container = new EventTarget();
+      container.controller = {};
+      container.ready = Promise.resolve(registration);
+      container.register = async () => registration;
+      container.getRegistration = async () => registration;
+      Object.defineProperty(navigator, "serviceWorker", { value: container });
+    }, subscription);
+    await login(page, account);
+    await page.getByRole("link", { name: "Nastavitve", exact: true }).click();
+    const enable = page.getByRole("button", { name: "Omogoči obvestila" });
+    await expect(enable).toBeEnabled();
+    expect(await page.evaluate(() => window.permissionCalls)).toBe(0);
+    await enable.click();
+    await expect(page.getByRole("status")).toHaveText(
+      "Obvestila so omogočena na tej napravi.",
+    );
+    await expect(enable).toBeDisabled();
+    await data.db.exec("reset role");
+    expect(
+      (await data.db.query("select user_id from push_subscriptions")).rows,
+    ).toEqual([{ user_id: account === "admin" ? ids.admin : ids.tech }]);
+    await page.getByRole("button", { name: "Izklopi obvestila" }).click();
+    await expect(page.getByRole("status")).toHaveText(
+      "Obvestila so izklopljena na tej napravi.",
+    );
+    await data.db.exec("reset role");
+    expect(
+      (await data.db.query("select id from push_subscriptions")).rows.length,
+    ).toBe(0);
+  });

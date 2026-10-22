@@ -89,10 +89,10 @@ test("push authentication, opt-in, SSRF/key validation and device ownership are 
     assert.equal(
       (
         await f.push.subscribe(
-          req("/api/push/subscription", ids.admin, subscription()),
+          req("/api/push/subscription", ids.unprofiled, subscription()),
         )
       ).status,
-      403,
+      401,
     );
     assert.equal(
       (

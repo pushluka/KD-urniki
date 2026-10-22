@@ -39,7 +39,11 @@ export async function backend(page) {
       url = new URL(req.url),
       api = fixture.api;
     let res;
-    if (url.pathname === "/api/push/subscription")
+    if (url.pathname === "/api/push/history")
+      res = await (req.method === "GET"
+        ? fixture.push.history(req)
+        : fixture.push.markRead(req));
+    else if (url.pathname === "/api/push/subscription")
       res = await (req.method === "GET"
         ? fixture.push.status(req)
         : req.method === "POST"

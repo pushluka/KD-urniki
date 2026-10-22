@@ -77,6 +77,7 @@ test("real worker never caches private responses; offline navigation has only a 
   await page.evaluate(async () => {
     await fetch("/api/auth/password-status");
     await fetch("/api/staff");
+    await fetch("/api/push/history");
     await fetch("/private.pdf?token=sensitive");
     await fetch("/osebje");
   });
@@ -96,6 +97,7 @@ test("real worker never caches private responses; offline navigation has only a 
     await page.evaluate(async () => {
       try {
         await fetch("/api/staff");
+    await fetch("/api/push/history");
         return "leaked";
       } catch {
         return "network failure";
