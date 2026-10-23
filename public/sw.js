@@ -1,6 +1,6 @@
 /* Bump this version when changing the public offline page. No application shell,
  * authentication, API, calendar or document response is ever cached here. */
-const CACHE = "kd-urniki-pwa-v1";
+const CACHE = "kd-urniki-pwa-v2";
 const OFFLINE = "/offline.html";
 self.addEventListener("install", (event) => {
   event.waitUntil(

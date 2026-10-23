@@ -285,3 +285,9 @@ Tehniki in hostese obvestila za svoje naprave prostovoljno upravljajo v **Nastav
 Administrator lahko v Nastavitvah vključi push in v zavihku Obvestila pregleda
 svojo 14-dnevno zgodovino. Pred objavo izvedite novo migracijo;
 [navodila za uvedbo, RLS in fizično čiščenje](docs/admin-notifications.md).
+
+## Mobilna berljivost
+
+Pregled pri širinah 320, 375 in 430 px ter vizualne primerjave za vse vloge:
+`npm run test:mobile`. Podrobnosti in preverjanje na napravah:
+[navodila](docs/mobile-readability.md).

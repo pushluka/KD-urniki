@@ -1,0 +1,2 @@
+/* Next's local development badge is not application UI. */
+nextjs-portal { visibility: hidden !important; }
