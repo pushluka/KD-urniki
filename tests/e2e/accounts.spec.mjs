@@ -13,7 +13,7 @@ async function login(page, identity, password = "test-password") {
   await expect(
     page.getByText("Nalaganje dogodkov …", { exact: true }),
   ).toHaveCount(0);
-  const logout = page.getByRole("button", { name: "Odjava", exact: true });
+  const logout = page.getByRole("button", { name: "Izpis", exact: true });
   if (await logout.isVisible()) await logout.click();
   await page
     .getByLabel("Uporabniško ime ali e-pošta", { exact: true })

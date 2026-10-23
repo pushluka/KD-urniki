@@ -49,6 +49,24 @@ async function login(page, role) {
         : "Hana Hostesa",
   );
 }
+async function logoutLabel(page, keyboard = false) {
+  const button = page.getByRole("button", { name: "Izpis", exact: true });
+  await expect(button).toBeVisible();
+  await expect(button.locator("span")).toHaveText("Izpis");
+  await expect(button.locator("svg")).toHaveAttribute("aria-hidden", "true");
+  const size = await button.boundingBox();
+  expect(size.width).toBeGreaterThanOrEqual(44);
+  expect(size.height).toBeGreaterThanOrEqual(44);
+  if (keyboard) {
+    await button.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(button).toBeFocused();
+    await expect(button).toHaveCSS("outline-style", "solid");
+    await expect(button).toBeInViewport();
+    await button.blur();
+  }
+}
 // A Link click may finish while Next is still fetching/compiling the destination.
 // Both pages contain .login, so require recovery-specific content before measuring.
 async function openForgotPassword(page) {
@@ -165,6 +183,7 @@ for (const role of ["admin", "tech", "hostess"])
   }, info) => {
     test.skip(info.project.name === "desktop");
     await login(page, role);
+    await logoutLabel(page);
     await month(page);
     await readable(page);
     await expect(page.locator(".calendar")).toHaveScreenshot(
@@ -241,7 +260,12 @@ for (const role of ["admin", "tech", "hostess"])
       await expect(notice).toContainText("Prebrano");
       await expect(page.locator(".notification-history")).toHaveScreenshot(
         "admin-notifications.png",
-        { mask: [page.locator("time")] },
+        {
+          stylePath: [
+            "./tests/mobile/screenshot.css",
+            "./tests/mobile/notification-screenshot.css",
+          ],
+        },
       );
       await page.getByRole("link", { name: "Nazaj na urnike" }).click();
       await page.getByRole("link", { name: "Osebje", exact: true }).click();
@@ -297,6 +321,7 @@ test("login, password forms and 200% text scaling preserve touch targets, reflow
   await sendRecovery.scrollIntoViewIfNeeded();
   await expect(sendRecovery).toBeInViewport();
   await login(page, "admin");
+  await logoutLabel(page, true);
   await month(page);
   await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
   await readable(page);
@@ -325,6 +350,10 @@ test("desktop retains the original typography and seven-column month grid", asyn
 }, info) => {
   test.skip(info.project.name !== "desktop");
   await login(page, "admin");
+  const originalViewport = page.viewportSize();
+  await page.setViewportSize({ ...originalViewport, height: 600 });
+  await logoutLabel(page, true);
+  await page.setViewportSize(originalViewport);
   await month(page);
   expect(
     await page.locator("body").evaluate((el) => getComputedStyle(el).fontSize),

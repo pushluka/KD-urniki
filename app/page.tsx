@@ -431,11 +431,9 @@ export default function Home() {
               <small>{profile?.role || "Prijava v delovni prostor"}</small>
             </div>
             {sessionId && (
-              <button
-                aria-label="Odjava"
-                onClick={() => void supabase?.auth.signOut()}
-              >
-                <LogOut size={18} />
+              <button onClick={() => void supabase?.auth.signOut()}>
+                <LogOut size={18} aria-hidden="true" />
+                <span>Izpis</span>
               </button>
             )}
           </div>
@@ -457,10 +455,10 @@ export default function Home() {
           {sessionId && (
             <button
               className="mobile-logout"
-              aria-label="Odjava"
               onClick={() => void supabase?.auth.signOut()}
             >
-              <LogOut size={18} />
+              <LogOut size={18} aria-hidden="true" />
+              <span>Izpis</span>
             </button>
           )}
         </header>

@@ -1,0 +1,7 @@
+/* Redact the same variable timestamps as before, directly on their DOM boxes.
+ * Coordinate masks can drift when a tall panel expands the mobile viewport
+ * during capture. Normal accessibility/layout checks run before this style. */
+.notification-history time {
+  color: transparent !important;
+  background: #ff00ff !important;
+}

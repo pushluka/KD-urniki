@@ -68,6 +68,7 @@ a {
   min-height: 100vh;
 }
 aside {
+  overflow-y: auto;
   width: 250px;
   position: fixed;
   inset: 0 auto 0 0;
@@ -157,6 +158,7 @@ nav {
 }
 .user {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   border-top: 1px solid var(--line);
@@ -174,6 +176,11 @@ nav {
   font-size: 11px;
   flex-shrink: 0;
 }
+.user > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .user strong {
   font-size: 11px;
 }
@@ -185,8 +192,10 @@ nav {
 }
 .user button {
   border: 0;
-  padding: 4px;
-  margin-left: auto;
+  flex-basis: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
 }
 main {
   margin-left: 250px;
