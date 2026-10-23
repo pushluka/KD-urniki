@@ -139,3 +139,43 @@ Avtomatizirano: `npm test`, `npm run test:e2e`, `npm run build`, `npm run typech
 vrsto z emuliranim ponudnikom ter uporabniški potek v Chromiumu na računalniku in
 telefonu. Dejanska dostava prek FCM/APNs in sistemskega obvestila na Android/iOS
 zahteva konfiguracijo VAPID in preizkus naprav; v tem okolju ni preverjena.
+
+## Prikaz stanja v Nastavitvah
+
+Stanje velja za trenutno napravo/brskalnik **in prijavljeni račun**, ne za vse
+uporabnikove naprave. Stran ob odprtju ter ob vrnitvi v vidno aplikacijo preveri
+`Notification.permission`, obstoječo naročnino prek
+`ServiceWorkerRegistration.pushManager.getSubscription()` in njeno pripadnost
+trenutnemu računu prek obstoječega avtoriziranega `GET /api/push/subscription`.
+Preveri tudi ujemanje VAPID ključa, kadar ga naročnina izpostavlja. Lokalna
+zastavica ne odloča o stanju; obisk strani ne ustvarja naročnin in ne zahteva
+dovoljenja.
+
+- **Vključena:** dovoljenje je odobreno, naročnina te naprave obstaja in je
+  registrirana za trenutni račun s trenutnim ključem. Vidno je samo »Izklopi
+  obvestila«.
+- **Izključena:** preverjanje je uspelo, vendar ni celotne veljavne povezave.
+  Vidno je samo »Omogoči obvestila«. Obstoječa lokalna naročnina brez strežniške
+  registracije se po izrecnem kliku ponovno registrira; dovoljenja, ki je že
+  odobreno, ne zahtevamo ponovno.
+- **Blokirana:** prikazano je navodilo za dovoljenje v nastavitvah
+  brskalnika/telefona, brez gumbov za naročanje.
+- **Nepodprta:** ni gumbov za naročanje; na iPhonu ostanejo navodila za namestitev
+  na začetni zaslon. Pri manjkajočem strežniškem ključu se pokaže ločeno opozorilo.
+- **Preverjanje ali napaka:** vključeno/izključeno stanje se ne ugiba. Ob napaki
+  je na voljo »Preveri znova«, ki ponovno bere stanje brez zahteve za dovoljenje.
+
+Po vklopu in izklopu se stanje ponovno prebere iz brskalnika in strežnika.
+Prekrivajoči odgovori ne prepišejo novejšega preverjanja. Ob odjavi se staro
+stanje odstrani. Osvežitev oziroma vrnitev na stran tako zazna tudi zunaj
+aplikacije preklicano dovoljenje ali odstranjeno strežniško registracijo.
+
+Za to spremembo niso potrebni SQL migracija, nove Vercel spremenljivke ali
+sprememba VAPID ključev. Pošiljanje, zgodovina, povezave na dogodke, RLS in
+service worker ostajajo nespremenjeni. Za preverjanje uporabite teste
+`tests/e2e/push-settings.spec.mjs` in `tests/e2e/push.spec.mjs`; scenariji pokrivajo
+administratorja, tehnika in hosteso, ponovno nalaganje, manjkajočo naročnino na
+obeh straneh, drugo napravo/račun ter napake pri preverjanju in registraciji.
+Na dejanskem telefonu preizkusite vklop → ponovno odprtje Nastavitev → izklop →
+ponovno odprtje ter zunanji preklic dovoljenja; pri tem se druge naprave istega
+uporabnika ne smejo odjaviti.
