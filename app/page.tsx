@@ -686,6 +686,9 @@ export default function Home() {
                   ))
                 )}
               </div>
+              <p className="mobile-calendar-hint">
+                Dogodki po dnevih v izbranem mesecu
+              </p>
               <div className="calendar-grid">
                 {["Pon", "Tor", "Sre", "Čet", "Pet", "Sob", "Ned"].map((d) => (
                   <div key={d} className="weekday">
@@ -714,6 +717,19 @@ export default function Home() {
                         >
                           {valid ? day : ""}
                         </span>
+                        {valid && (
+                          <span className="mobile-day-label">
+                            {new Date(
+                              month.getFullYear(),
+                              month.getMonth(),
+                              day,
+                            ).toLocaleDateString("sl-SI", {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                            })}
+                          </span>
+                        )}
                         {valid &&
                           monthly
                             .filter(
