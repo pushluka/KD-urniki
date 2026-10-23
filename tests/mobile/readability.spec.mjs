@@ -49,6 +49,25 @@ async function login(page, role) {
         : "Hana Hostesa",
   );
 }
+// A Link click may finish while Next is still fetching/compiling the destination.
+// Both pages contain .login, so require recovery-specific content before measuring.
+async function openForgotPassword(page) {
+  await page
+    .getByRole("link", { name: "Pozabljeno geslo", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/pozabljeno-geslo$/, { timeout: 15000 });
+  const panel = page.locator("main.auth-page > .login").filter({
+    has: page.getByRole("heading", {
+      name: "Pozabljeno geslo",
+      exact: true,
+      level: 1,
+    }),
+  });
+  await expect(panel.getByLabel("E-pošta", { exact: true })).toBeVisible({
+    timeout: 15000,
+  });
+  return panel;
+}
 async function month(page) {
   const diff =
     (2026 - new Date().getFullYear()) * 12 + 10 - new Date().getMonth();
@@ -262,9 +281,21 @@ test("login, password forms and 200% text scaling preserve touch targets, reflow
     .locator('meta[name="viewport"]')
     .getAttribute("content");
   expect(viewport).not.toMatch(/user-scalable=no|maximum-scale=1(?:,|$)/);
-  await page.getByRole("link", { name: "Pozabljeno geslo" }).click();
+  const recovery = await openForgotPassword(page);
   await readable(page);
-  await expect(page.locator(".login")).toHaveScreenshot("forgot-password.png");
+  await expect(recovery).toHaveScreenshot("forgot-password.png");
+  await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+  const recoveryEmail = recovery.getByLabel("E-pošta", { exact: true });
+  await expect(recoveryEmail).toHaveCSS("font-size", "32px");
+  await recoveryEmail.focus();
+  await expect(recoveryEmail).toHaveCSS("outline-style", "solid");
+  await readable(page);
+  const sendRecovery = recovery.getByRole("button", {
+    name: "Pošlji povezavo",
+    exact: true,
+  });
+  await sendRecovery.scrollIntoViewIfNeeded();
+  await expect(sendRecovery).toBeInViewport();
   await login(page, "admin");
   await month(page);
   await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
@@ -362,4 +393,51 @@ test("new password and recovery forms keep readable fields and usable actions", 
   ).toBeVisible();
   await readable(page);
   await expect(page.locator(".login")).toHaveScreenshot("initial-password.png");
+});
+
+// Hold the route until the test explicitly releases it: no machine-speed assumptions.
+test("recovery screenshot waits for its destination during delayed client navigation", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name === "desktop");
+  let release,
+    requestHeld = false;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/pozabljeno-geslo*", async (route) => {
+    requestHeld = true;
+    await gate;
+    await route.continue();
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Prijava v urnike", exact: true }),
+  ).toBeVisible();
+  let completed = false;
+  const navigation = openForgotPassword(page).then((panel) => {
+    completed = true;
+    return panel;
+  });
+  try {
+    await expect.poll(() => requestHeld).toBe(true);
+    await expect(
+      page.getByLabel("Uporabniško ime ali e-pošta", { exact: true }),
+    ).toBeVisible();
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    expect(
+      completed,
+      "must not accept the old sign-in form as the recovery page",
+    ).toBe(false);
+  } finally {
+    release();
+  }
+  const recovery = await navigation;
+  await readable(page, recovery);
+  await expect(recovery).toHaveScreenshot("forgot-password.png");
 });

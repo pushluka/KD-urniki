@@ -88,3 +88,17 @@ Pred objavo na testni namestitvi preverite Android Chrome in iPhone Safari/PWA:
 - Delovanje obstoječih Push dovoljenj, prebranosti in odpiranja povezane prireditve.
 
 SQL migracija in dodatne Supabase/Vercel okoljske spremenljivke niso potrebne.
+
+### Zanesljivo odpiranje obrazca za obnovitev
+
+Napaka Actions pri `forgot-password.png` (pričakovano 296 × 518, prejeto 288 × 450)
+ni bila sprememba postavitve: prejeti posnetek je bil še vedno začetna prijava.
+Oba zaslona uporabljata `.login`, klik Next Link pa ne zagotavlja, da je počasna
+odjemalska navigacija že zaključena. Pred meritvami in posnetkom test zdaj preveri
+URL ter naslov in e-poštno polje obnovitvenega obrazca. Obstoječe PNG reference
+in prag vizualne primerjave so ohranjeni.
+
+Regresijski test zadrži odgovor navigacije do izrecne sprostitve in preveri, da
+stara prijava ne šteje kot odprta obnovitev. Ne uporablja fiksnih čakalnih časov.
+Obnovitveni obrazec se dodatno preveri pri 200 % besedilu: velikost pisave vnosov,
+vidni fokus, dosegljivost gumba, kontrast in odsotnost horizontalnega prelivanja.
