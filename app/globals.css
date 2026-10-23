@@ -1206,3 +1206,40 @@ nav .nav {
   list-style-type: decimal;
   padding-left: 22px;
 }
+.notification-history {
+  width: 100%;
+  max-width: 800px;
+  padding: 28px;
+}
+.notification-item {
+  padding: 20px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+.notification-item.unread {
+  border-left: 3px solid #e96b2c;
+  padding-left: 14px;
+}
+.notification-item h2 {
+  font-size: 19px;
+  margin: 10px 0;
+}
+.notification-item time {
+  font-size: 13px;
+  color: #5b6068;
+}
+.notification-pagination {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+}
+.notification-item {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .admin-navigation {
+    flex-wrap: wrap;
+  }
+  .admin-navigation .nav {
+    flex: 1 1 100px;
+  }
+}

@@ -6,6 +6,7 @@ export type PushJob = {
   user_id: string;
   event_id: string;
   kind: "assigned" | "changed" | "removed";
+  notification_id?: string | null;
   lease_token: string;
   subscription_id: string;
   endpoint: string;
@@ -57,16 +58,19 @@ function checked(result: { error: unknown }) {
 export function pushPayload(job: PushJob) {
   return JSON.stringify({
     title: "KD Urniki",
-    body: {
-      assigned: "Dodeljeni ste dogodku. Odprite aplikacijo za podrobnosti.",
-      changed:
-        "Vaše ure na dogodku so spremenjene. Odprite aplikacijo za podrobnosti.",
-      removed:
-        "Z dogodka ste bili odstranjeni. Odprite aplikacijo za podrobnosti.",
-    }[job.kind],
+    body: job.notification_id
+      ? "Razporeditev ekipe je spremenjena. Odprite aplikacijo za podrobnosti."
+      : {
+          assigned: "Dodeljeni ste dogodku. Odprite aplikacijo za podrobnosti.",
+          changed:
+            "Vaše ure na dogodku so spremenjene. Odprite aplikacijo za podrobnosti.",
+          removed:
+            "Z dogodka ste bili odstranjeni. Odprite aplikacijo za podrobnosti.",
+        }[job.kind],
     eventId: job.event_id,
     recipientId: job.user_id,
-    notificationId: job.id,
+    notificationId: job.notification_id ?? job.id,
+    historyId: job.notification_id ?? undefined,
   });
 }
 export function createPushApi({
@@ -89,14 +93,19 @@ export function createPushApi({
 }) {
   async function staff(req: Request, write = false) {
     const user = await authorize(req, write);
-    if (!["tehnik", "hostesa"].includes(user.role))
-      throw new ApiError(
-        403,
-        "Nastavitve obvestil so na voljo tehnikom in hostesam.",
-      );
+    if (!["administrator", "tehnik", "hostesa"].includes(user.role))
+      throw new ApiError(403, "Nastavitve obvestil niso na voljo temu računu.");
+    return user;
+  }
+  async function adminUser(req: Request, write = false) {
+    const user = await authorize(req, write);
+    if (user.role !== "administrator")
+      throw new ApiError(403, "Dostop je dovoljen samo administratorju.");
     return user;
   }
   async function dispatch() {
+    // Retention runs even when VAPID is temporarily missing or no deliveries exist.
+    checked(await admin.rpc("cleanup_admin_notifications"));
     if (!publicKey)
       throw new ApiError(503, "Potisna obvestila niso nastavljena.");
     const claimed = await admin.rpc("claim_push", { p_vapid: publicKey });
@@ -124,6 +133,38 @@ export function createPushApi({
     return json({ processed: jobs.length });
   }
   return {
+    history: (req: Request) =>
+      endpoint(async () => {
+        const user = await adminUser(req),
+          offset = Number(new URL(req.url).searchParams.get("offset") ?? 0);
+        if (!Number.isInteger(offset) || offset < 0 || offset > 1000000)
+          throw new ApiError(400, "Neveljavna stran.");
+        const result = await admin.rpc("list_admin_notifications", {
+          p_user: user.id,
+          p_offset: offset,
+        });
+        checked(result);
+        return json(result.data);
+      }),
+    markRead: (req: Request) =>
+      endpoint(async () => {
+        const user = await adminUser(req, true),
+          data = await body(req);
+        if (
+          typeof data.id !== "string" ||
+          !/^[0-9a-f-]{36}$/i.test(data.id) ||
+          typeof data.read !== "boolean"
+        )
+          throw new ApiError(400, "Neveljavno obvestilo.");
+        const result = await admin.rpc("set_admin_notification_read", {
+          p_user: user.id,
+          p_id: data.id,
+          p_read: data.read,
+        });
+        checked(result);
+        if (!result.data) throw new ApiError(404, "Obvestilo ni več na voljo.");
+        return json({ updated: true });
+      }),
     status: (req: Request) =>
       endpoint(async () => {
         const user = await staff(req);
@@ -134,6 +175,7 @@ export function createPushApi({
           .eq("vapid_key", publicKey ?? "");
         checked(rows);
         return json({
+          role: user.role,
           public_key: publicKey ?? null,
           endpoint_hashes: rows.data?.map((r) => r.endpoint_hash) ?? [],
         });

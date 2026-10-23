@@ -65,6 +65,9 @@ const columns = {
   auth_attempts: ["bucket", "window_started", "attempts"],
 };
 const rpcArgs = {
+  cleanup_admin_notifications: [],
+  list_admin_notifications: ["p_user", "p_offset"],
+  set_admin_notification_read: ["p_user", "p_id", "p_read"],
   register_push: [
     "p_user",
     "p_hash",

@@ -72,7 +72,10 @@ self.addEventListener("push", (event) => {
         !uuid.test(data.notificationId)
       )
         return;
-      const url = `/?dogodek=${data.eventId}&prejemnik=${data.recipientId}`;
+      const history = uuid.test(data.historyId ?? "")
+        ? `&obvestilo=${data.historyId}`
+        : "";
+      const url = `/?dogodek=${data.eventId}&prejemnik=${data.recipientId}${history}`;
       await self.registration.showNotification("KD Urniki", {
         body:
           typeof data.body === "string"
