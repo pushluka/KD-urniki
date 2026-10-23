@@ -13,6 +13,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+        # Public, non-working fixture values: PWA tests need the configured login UI.
+        # NEXT_PUBLIC values are inlined at build time, not by `next start`.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://e2e.supabase.test
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-public-key
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run test:mobile

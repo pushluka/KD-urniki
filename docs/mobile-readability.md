@@ -102,3 +102,10 @@ Regresijski test zadrži odgovor navigacije do izrecne sprostitve in preveri, da
 stara prijava ne šteje kot odprta obnovitev. Ne uporablja fiksnih čakalnih časov.
 Obnovitveni obrazec se dodatno preveri pri 200 % besedilu: velikost pisave vnosov,
 vidni fokus, dosegljivost gumba, kontrast in odsotnost horizontalnega prelivanja.
+
+Za CI produkcijsko gradnjo sta javni spremenljivki Supabase nastavljeni na iste
+neveljavne testne vrednosti kot pri brskalniških fixture (`e2e.supabase.test`,
+`test-public-key`). Next.js ju vgradi ob `npm run build`; nastavitev šele pri
+`next start` ne zadostuje. Tako PWA preizkus posodobitve dobi prijavni obrazec
+namesto opozorila o manjkajoči konfiguraciji, brez pravih ključev ali dostopa do
+produkcijskih podatkov. Vercel produkcija še vedno uporablja svoje nastavitve.
