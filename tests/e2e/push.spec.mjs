@@ -51,6 +51,7 @@ test("notification settings request no permission on load and remain optional", 
         permission: "default",
         requestPermission: async () => {
           window.permissionCalls++;
+          window.Notification.permission = "denied";
           return "denied";
         },
       },
@@ -66,7 +67,7 @@ test("notification settings request no permission on load and remain optional", 
   ).toBeEnabled();
   expect(await page.evaluate(() => window.permissionCalls)).toBe(0);
   await page.getByRole("button", { name: "Omogoči obvestila" }).click();
-  await expect(page.getByRole("status")).toContainText(
+  await expect(page.locator(".notice")).toContainText(
     "Obvestila niso dovoljena",
   );
   expect(await page.evaluate(() => window.permissionCalls)).toBe(1);
@@ -76,7 +77,7 @@ test("notification settings request no permission on load and remain optional", 
   ).toBeVisible();
 });
 
-for (const account of ["tech", "admin"])
+for (const account of ["tech", "admin", "hostess"])
   test(`${account} can enable and disable only the current device after an explicit permission gesture`, async ({
     page,
   }) => {
@@ -138,18 +139,27 @@ for (const account of ["tech", "admin"])
     await expect(enable).toBeEnabled();
     expect(await page.evaluate(() => window.permissionCalls)).toBe(0);
     await enable.click();
-    await expect(page.getByRole("status")).toHaveText(
-      "Obvestila so omogočena na tej napravi.",
-    );
-    await expect(enable).toBeDisabled();
+    await expect(
+      page.getByRole("status", { name: "Stanje obvestil" }),
+    ).toHaveText("Obvestila so vključena.");
+    await expect(enable).toHaveCount(0);
     await data.db.exec("reset role");
     expect(
       (await data.db.query("select user_id from push_subscriptions")).rows,
-    ).toEqual([{ user_id: account === "admin" ? ids.admin : ids.tech }]);
+    ).toEqual([
+      {
+        user_id:
+          account === "admin"
+            ? ids.admin
+            : account === "hostess"
+              ? ids.hostess
+              : ids.tech,
+      },
+    ]);
     await page.getByRole("button", { name: "Izklopi obvestila" }).click();
-    await expect(page.getByRole("status")).toHaveText(
-      "Obvestila so izklopljena na tej napravi.",
-    );
+    await expect(
+      page.getByRole("status", { name: "Stanje obvestil" }),
+    ).toHaveText("Obvestila so izključena.");
     await data.db.exec("reset role");
     expect(
       (await data.db.query("select id from push_subscriptions")).rows.length,

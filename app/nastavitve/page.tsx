@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { staffRequest } from "@/lib/staff-client";
 function bytes(key: string) {
   return Uint8Array.from(atob(key.replace(/-/g, "+").replace(/_/g, "/")), (c) =>
@@ -27,7 +28,12 @@ export default function PushSettings() {
     [message, setMessage] = useState(""),
     [supported, setSupported] = useState(false),
     [ios, setIos] = useState(false);
-  useEffect(() => {
+  const request = useRef(0);
+  const working = useRef(false);
+  const refresh = useCallback(async (clearMessage = true) => {
+    const current = ++request.current;
+    setReady(false);
+    if (clearMessage) setMessage("");
     const apple =
       /iPad|iPhone|iPod/.test(navigator.userAgent) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -42,32 +48,85 @@ export default function PushSettings() {
       (!apple || !!standalone);
     setIos(apple && !standalone);
     setSupported(supported);
-    if ("Notification" in window) setPermission(Notification.permission);
-    void staffRequest("/api/push/subscription")
-      .then(async (data) => {
-        setAllowed(true);
-        setKey(data.public_key);
-        setRole(data.role ?? "");
-        if (supported) {
-          const r = await navigator.serviceWorker.getRegistration("/"),
-            sub = await r?.pushManager.getSubscription();
-          setEnabled(
-            Notification.permission === "granted" &&
-              !!sub &&
-              data.endpoint_hashes.includes(await hash(sub.endpoint)),
-          );
-        }
-      })
-      .catch((e) => setMessage(e.message))
-      .finally(() => setReady(true));
+    const permission =
+      "Notification" in window ? Notification.permission : "default";
+    setPermission(permission);
+    try {
+      const data = await staffRequest("/api/push/subscription");
+      let enabled = false;
+      if (supported && permission === "granted") {
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        const sub = await registration?.pushManager.getSubscription();
+        const existing = sub?.options.applicationServerKey;
+        const matchingKey =
+          !!data.public_key &&
+          (!existing ||
+            new Uint8Array(existing).toString() ===
+              bytes(data.public_key).toString());
+        enabled =
+          !!sub &&
+          matchingKey &&
+          data.endpoint_hashes.includes(await hash(sub.endpoint));
+      }
+      if (current !== request.current) return;
+      setAllowed(true);
+      setRole(data.role ?? "");
+      setKey(data.public_key);
+      setEnabled(enabled);
+    } catch (e) {
+      if (current !== request.current) return;
+      setAllowed(false);
+      setEnabled(false);
+      setMessage(
+        e instanceof Error ? e.message : "Stanja obvestil ni mogoče preveriti.",
+      );
+    } finally {
+      if (current === request.current) setReady(true);
+    }
   }, []);
+  useEffect(() => {
+    void refresh();
+    const check = () => {
+      if (!working.current && document.visibilityState === "visible")
+        void refresh();
+    };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    let authCheck: ReturnType<typeof setTimeout> | undefined;
+    const subscription = supabase?.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        request.current++;
+        clearTimeout(authCheck);
+        authCheck = setTimeout(check, 0);
+      }
+      if (event === "SIGNED_OUT") {
+        request.current++;
+        setAllowed(false);
+        setEnabled(false);
+        setReady(true);
+        setMessage("Za nadaljevanje se prijavite.");
+      }
+    }).data.subscription;
+    return () => {
+      request.current++;
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+      clearTimeout(authCheck);
+      subscription?.unsubscribe();
+    };
+  }, [refresh]);
   async function enable() {
-    if (!key || busy) return;
+    if (!key || working.current) return;
+    working.current = true;
+    request.current++;
     setBusy(true);
     setMessage("");
     try {
       // Called directly in the click handler: Safari requires a user gesture.
-      const permission = await Notification.requestPermission();
+      const permission =
+        Notification.permission === "default"
+          ? await Notification.requestPermission()
+          : Notification.permission;
       setPermission(permission);
       if (permission !== "granted")
         throw new Error(
@@ -112,17 +171,21 @@ export default function PushSettings() {
         await sub.unsubscribe();
         throw e;
       }
-      setEnabled(true);
-      setMessage("Obvestila so omogočena na tej napravi.");
+      // The subsequent browser/server check is the source of the displayed state.
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "Vklop ni uspel. Poskusite znova.",
       );
     } finally {
+      await refresh(false);
+      working.current = false;
       setBusy(false);
     }
   }
   async function disable() {
+    if (working.current) return;
+    working.current = true;
+    request.current++;
     setBusy(true);
     setMessage("");
     try {
@@ -142,15 +205,16 @@ export default function PushSettings() {
             "Izklop ni potrjen. Preverite dovoljenje v nastavitvah brskalnika.",
           );
       }
-      setEnabled(false);
       setMessage(
         serverFailed
           ? "Naprava je odjavljena od obvestil. Zastarelo naročnino bo strežnik odstranil ob naslednjem pošiljanju."
-          : "Obvestila so izklopljena na tej napravi.",
+          : "",
       );
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Izklop ni uspel.");
     } finally {
+      await refresh(false);
+      working.current = false;
       setBusy(false);
     }
   }
@@ -166,69 +230,78 @@ export default function PushSettings() {
           Nastavitev velja samo za to napravo in račun. Aplikacijo lahko
           uporabljate brez obvestil.
         </p>
-        {!ready ? (
-          <p role="status">Preverjanje nastavitev …</p>
-        ) : (
-          allowed && (
-            <>
+        <p role="status" aria-label="Stanje obvestil">
+          {!ready
+            ? "Preverjanje nastavitev …"
+            : !allowed
+              ? "Stanja obvestil ni mogoče preveriti."
+              : !supported
+                ? "Obvestila v tem brskalniku niso podprta."
+                : permission === "denied"
+                  ? "Obvestila so blokirana."
+                  : !key
+                    ? "Obvestila na strežniku niso nastavljena."
+                    : enabled
+                      ? "Obvestila so vključena."
+                      : "Obvestila so izključena."}
+        </p>
+        {ready && allowed && (
+          <>
+            {permission === "denied" && supported && (
               <p>
-                Dovoljenje:{" "}
-                {permission === "granted"
-                  ? "dovoljeno"
-                  : permission === "denied"
-                    ? "zavrnjeno"
-                    : "še ni izbrano"}
-                . Obvestila na tej napravi:{" "}
-                {enabled ? "vklopljena" : "izklopljena"}.
+                V nastavitvah telefona oziroma brskalnika dovolite obvestila za
+                to spletno mesto, nato se vrnite v Nastavitve.
               </p>
-              {ios && (
-                <p>
-                  Na iPhonu potrebujete iOS/iPadOS 16.4 ali novejši. Aplikacijo
-                  najprej dodajte na začetni zaslon v Safariju in jo odprite z
-                  ikono.
-                </p>
-              )}
-              {!supported && (
-                <p>
-                  Potisna obvestila v tem brskalniku niso na voljo. Uporabite
-                  podprt brskalnik ali nameščeno aplikacijo.
-                </p>
-              )}
-              {!key && (
-                <p>
-                  Strežnik za obvestila še ni nastavljen. Obvestite
-                  administratorja.
-                </p>
-              )}
-              <button
-                className="primary"
-                disabled={
-                  !supported ||
-                  !key ||
-                  enabled ||
-                  busy ||
-                  permission === "denied"
-                }
-                onClick={() => void enable()}
-              >
-                Omogoči obvestila
-              </button>{" "}
-              <button
-                disabled={!supported || busy}
-                onClick={() => void disable()}
-              >
-                Izklopi obvestila
-              </button>
+            )}
+            {ios && (
               <p>
-                V obvestilu ni naslova dogodka ali osebnih ur. Podrobnosti so
-                dostopne šele v aplikaciji. Na skupni napravi se po uporabi
-                odjavite.
+                Na iPhonu potrebujete iOS/iPadOS 16.4 ali novejši. Aplikacijo
+                najprej dodajte na začetni zaslon v Safariju in jo odprite z
+                ikono.
               </p>
-            </>
-          )
+            )}
+            {!supported && (
+              <p>
+                Potisna obvestila v tem brskalniku niso na voljo. Uporabite
+                podprt brskalnik ali nameščeno aplikacijo.
+              </p>
+            )}
+            {!key && (
+              <p>
+                Strežnik za obvestila še ni nastavljen. Obvestite
+                administratorja.
+              </p>
+            )}
+            {supported &&
+              permission !== "denied" &&
+              key &&
+              (enabled ? (
+                <button disabled={busy} onClick={() => void disable()}>
+                  {busy ? "Izklapljanje …" : "Izklopi obvestila"}
+                </button>
+              ) : (
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => void enable()}
+                >
+                  {busy ? "Vklapljanje …" : "Omogoči obvestila"}
+                </button>
+              ))}
+            <p>
+              V obvestilu ni naslova dogodka ali osebnih ur. Podrobnosti so
+              dostopne šele v aplikaciji. Na skupni napravi se po uporabi
+              odjavite.
+            </p>
+          </>
+        )}
+        {ready && !allowed && (
+          <button disabled={busy} onClick={() => void refresh()}>
+            Preveri znova
+          </button>
         )}
         {message && (
-          <p className="notice" role="status">
+          <p className="notice" role="alert">
             {message}
           </p>
         )}
