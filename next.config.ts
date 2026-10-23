@@ -3,6 +3,17 @@ const config: NextConfig = {
   async headers() {
     return [
       {
+        source: "/api/google/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
+      {
+        source: "/nastavitve/google",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
         source: "/sw.js",
         headers: [
           {

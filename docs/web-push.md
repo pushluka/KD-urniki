@@ -68,7 +68,7 @@ Administratorjev brskalnik po shranitvi sproži tudi preverjeni `POST /api/push/
 za hitro dostavo; za to ne potrebuje CRON skrivnosti. Če zapre zavihek, dostavo
 nadaljuje periodični klic. Preverite, da anonimni GET brez skrivnosti vrne 401.
 Vsak klic obdela največ 10 dostav; ob večjih količinah spremljajte zaostanek in
-prilagodite pogostost razporejevalnika. En Vercel klic ima omejitev 30 sekund.
+prilagodite pogostost razporejevalnika. Skupni Vercel dispatch (tudi Google Koledar) ima omejitev 60 sekund.
 
 ## Dostava, zasebnost in ponovni poskusi
 

@@ -285,3 +285,8 @@ Tehniki in hostese obvestila za svoje naprave prostovoljno upravljajo v **Nastav
 Administrator lahko v Nastavitvah vključi push in v zavihku Obvestila pregleda
 svojo 14-dnevno zgodovino. Pred objavo izvedite novo migracijo;
 [navodila za uvedbo, RLS in fizično čiščenje](docs/admin-notifications.md).
+
+## Google Koledar
+
+Prostovoljna sinhronizacija samo lastnih dodelitev tehnikov/hostes v namenski koledar.
+Migracija, Google Cloud/Vercel nastavitve in sprejemni preizkusi: [navodila](docs/google-calendar.md).

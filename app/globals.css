@@ -1243,3 +1243,18 @@ nav .nav {
     flex: 1 1 100px;
   }
 }
+.google-settings {
+  margin: 28px 0;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 20px;
+  overflow-wrap: anywhere;
+}
+.google-settings h2 {
+  font-size: 22px;
+}
+.google-settings button {
+  margin: 8px 4px 8px 0;
+}
+.google-settings select {
+  max-width: 100%;
+}

@@ -1,9 +1,11 @@
 // Isolated browser tests: actual server handlers and migrations, emulated Supabase Auth.
+import { googleFixture } from "../helpers/google-fixture.mjs";
 import { createECDH } from "node:crypto";
 import { createPushApi } from "../../lib/server/push.ts";
 import { serverFixture } from "../helpers/server-fixture.mjs";
 export async function backend(page) {
   const fixture = await serverFixture({ appOrigin: "http://localhost:3100" });
+  fixture.calendar = await googleFixture("http://localhost:3100", fixture);
   const vapid = createECDH("prime256v1");
   vapid.generateKeys();
   fixture.push = createPushApi({
@@ -39,7 +41,10 @@ export async function backend(page) {
       url = new URL(req.url),
       api = fixture.api;
     let res;
-    if (url.pathname === "/api/push/history")
+    if (url.pathname.startsWith("/api/google/")) {
+      const action = url.pathname.split("/").at(-1);
+      res = await fixture.calendar.google[action](req);
+    } else if (url.pathname === "/api/push/history")
       res = await (req.method === "GET"
         ? fixture.push.history(req)
         : fixture.push.markRead(req));

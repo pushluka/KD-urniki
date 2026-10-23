@@ -74,7 +74,12 @@ test("real worker never caches private responses; offline navigation has only a 
   expect(supportsPush).toBe(true);
   const response = await request.get("/sw.js");
   expect(response.headers()["cache-control"]).toContain("no-store");
+  const googleResponse = await request.get("/api/google/status");
+  expect(googleResponse.headers()["cache-control"]).toContain("no-store");
+  expect(googleResponse.headers()["referrer-policy"]).toBe("no-referrer");
   await page.evaluate(async () => {
+    await fetch("/api/google/status");
+    await fetch("/nastavitve/google?ticket=public-test-ticket");
     await fetch("/api/auth/password-status");
     await fetch("/api/staff");
     await fetch("/api/push/history");

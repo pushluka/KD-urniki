@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { GoogleCalendarSettings } from "@/components/google-calendar-settings";
 import { useEffect, useState } from "react";
 import { staffRequest } from "@/lib/staff-client";
 function bytes(key: string) {
@@ -226,6 +227,9 @@ export default function PushSettings() {
               </p>
             </>
           )
+        )}
+        {allowed && ["tehnik", "hostesa"].includes(role) && (
+          <GoogleCalendarSettings />
         )}
         {message && (
           <p className="notice" role="status">
