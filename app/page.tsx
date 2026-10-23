@@ -367,7 +367,7 @@ export default function Home() {
     );
   return (
     <div className="shell">
-      <aside>
+      <aside className="app-navigation">
         <a className="brand" href="/">
           <span className="brand-icon">
             kd<span>•</span>
@@ -377,7 +377,10 @@ export default function Home() {
           </span>
         </a>
         <div className="workspace-label">ORGANIZACIJA DELA</div>
-        <nav className={admin ? "admin-navigation" : undefined}>
+        <nav
+          aria-label="Glavna navigacija"
+          className={admin ? "admin-navigation" : undefined}
+        >
           {[
             { name: "Koledar", Icon: CalendarDays },
             { name: "Moj razpored", Icon: LayoutGrid },

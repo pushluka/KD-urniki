@@ -36,6 +36,7 @@ function worker() {
         "kd-urniki-pwa-old",
         "kd-urniki-pwa-v1",
         "kd-urniki-pwa-v2",
+        "kd-urniki-pwa-v3",
         "unrelated",
       ],
       delete: async (key) => {
@@ -89,7 +90,11 @@ test("worker caches only public offline page and removes only its obsolete cache
   await w.lifecycle("install");
   await w.lifecycle("activate");
   assert.deepEqual([...w.entries.keys()], ["/offline.html"]);
-  assert.deepEqual(w.deleted, ["kd-urniki-pwa-old", "kd-urniki-pwa-v1"]);
+  assert.deepEqual(w.deleted, [
+    "kd-urniki-pwa-old",
+    "kd-urniki-pwa-v1",
+    "kd-urniki-pwa-v2",
+  ]);
   assert.equal(w.calls[0].opts.credentials, "omit");
   assert.equal(w.activated(), false);
   w.message({ type: "UNTRUSTED_MESSAGE" });

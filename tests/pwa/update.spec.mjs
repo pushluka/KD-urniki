@@ -8,7 +8,10 @@ test("an update preserves unsaved input until the user explicitly accepts a relo
     const registration = new EventTarget();
     registration.waiting = null;
     registration.installing = null;
-    registration.update = async () => {};
+    window.pwaUpdateChecks = 0;
+    registration.update = async () => {
+      window.pwaUpdateChecks++;
+    };
     container.register = async () => registration;
     Object.defineProperty(navigator, "serviceWorker", { value: container });
     window.pwaUpdatedElsewhere = () =>
@@ -30,6 +33,14 @@ test("an update preserves unsaved input until the user explicitly accepts a relo
   await page.goto("/");
   const input = page.getByLabel("Uporabniško ime ali e-pošta", { exact: true });
   await input.fill("neshranjen-vnos");
+  const checks = await page.evaluate(() => window.pwaUpdateChecks);
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  await expect
+    .poll(() => page.evaluate(() => window.pwaUpdateChecks))
+    .toBeGreaterThan(checks);
+  await expect(input).toHaveValue("neshranjen-vnos");
   await page.evaluate(() => window.offerPwaUpdate());
   const update = page.getByRole("button", { name: "Posodobi aplikacijo" });
   await expect(update).toBeVisible();

@@ -1041,6 +1041,16 @@ nav .nav {
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
+  /* The navigation is a top menu on phones, never a narrow desktop rail. */
+  .app-navigation {
+    inset: auto;
+    height: auto;
+    max-width: 100%;
+  }
+  .app-navigation nav {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  }
   .brand-icon {
     font-size: 28px;
   }

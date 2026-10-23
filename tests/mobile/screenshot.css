@@ -1,2 +1,12 @@
 /* Next's local development badge is not application UI. */
-nextjs-portal { visibility: hidden !important; }
+nextjs-portal {
+  visibility: hidden !important;
+}
+/* Same magenta timestamp redaction as the reference, painted by the DOM rather
+ * than Playwright mask rectangles. Masks drift when Chromium resizes a mobile
+ * viewport to capture a tall element. All normal readability assertions run
+ * before screenshot styles are applied; only nondeterministic dates are hidden. */
+.notification-history time {
+  color: transparent !important;
+  background: #ff00ff !important;
+}

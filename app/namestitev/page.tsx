@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DisplayDiagnostics } from "@/components/display-diagnostics";
 export default function Install() {
   return (
     <main className="auth-page">
@@ -50,6 +51,7 @@ export default function Install() {
           Ko se prikaže obvestilo o novi različici, shranite vnos in izberite
           »Posodobi aplikacijo«. Aplikacija se bo ponovno odprla.
         </p>
+        <DisplayDiagnostics />
         <Link href="/">Nazaj na urnike</Link>
       </article>
     </main>

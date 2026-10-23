@@ -80,6 +80,9 @@ async function month(page) {
   await expect(page.locator(".calendar-grid .event")).toHaveCount(1);
 }
 async function readable(page, root = page.locator("body")) {
+  // scrollWidth <= innerWidth alone also passes a phone shrunk to a 980px
+  // desktop viewport. Compare the actual layout viewport to the device viewport.
+  expect(await page.evaluate(() => innerWidth)).toBe(page.viewportSize().width);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -166,7 +169,49 @@ for (const role of ["admin", "tech", "hostess"])
     test.skip(info.project.name === "desktop");
     await login(page, role);
     await month(page);
+    await expect(page.locator(".app-navigation")).toHaveCSS(
+      "position",
+      "static",
+    );
+    await expect(page.locator(".calendar-grid")).toHaveCSS("display", "block");
+    await expect(page.locator(".weekday").first()).not.toBeVisible();
+    await expect(
+      page.locator(".day:has(.event) .mobile-day-label").first(),
+    ).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const main = document.querySelector(".shell > main");
+      const nav = document.querySelector(".app-navigation");
+      const card = document.querySelector(".calendar-grid .event");
+      const grid = document.querySelector(".calendar-grid");
+      return {
+        mainX: main.getBoundingClientRect().x,
+        mainWidth: main.getBoundingClientRect().width,
+        navWidth: nav.getBoundingClientRect().width,
+        topNavigation:
+          nav.getBoundingClientRect().bottom <=
+          main.getBoundingClientRect().top + 1,
+        cardRatio:
+          card.getBoundingClientRect().width /
+          grid.getBoundingClientRect().width,
+        transformed: [document.documentElement, document.body, main].some(
+          (el) =>
+            getComputedStyle(el).transform !== "none" ||
+            Number(getComputedStyle(el).zoom) !== 1,
+        ),
+        scale: window.visualViewport.scale,
+      };
+    });
+    expect(layout.mainX).toBe(0);
+    expect(layout.mainWidth).toBe(page.viewportSize().width);
+    expect(layout.navWidth).toBe(page.viewportSize().width);
+    expect(layout.topNavigation).toBe(true);
+    expect(layout.cardRatio).toBeGreaterThan(0.8);
+    expect(layout.transformed).toBe(false);
+    expect(layout.scale).toBe(1);
     await readable(page);
+    await expect(page.locator(".app-navigation")).toHaveScreenshot(
+      `${role}-navigation.png`,
+    );
     await expect(page.locator(".calendar")).toHaveScreenshot(
       `${role}-calendar.png`,
       visual,
@@ -239,9 +284,14 @@ for (const role of ["admin", "tech", "hostess"])
         .getByRole("button", { name: "Označi kot prebrano", exact: true })
         .click();
       await expect(notice).toContainText("Prebrano");
+      await expect(
+        notice.getByRole("button", {
+          name: "Označi kot neprebrano",
+          exact: true,
+        }),
+      ).toBeEnabled();
       await expect(page.locator(".notification-history")).toHaveScreenshot(
         "admin-notifications.png",
-        { mask: [page.locator("time")] },
       );
       await page.getByRole("link", { name: "Nazaj na urnike" }).click();
       await page.getByRole("link", { name: "Osebje", exact: true }).click();
@@ -265,6 +315,38 @@ for (const role of ["admin", "tech", "hostess"])
       );
     }
   });
+test("pinch zoom keeps the phone viewport, top navigation and dated cards", async ({
+  page,
+  context,
+}, info) => {
+  test.skip(info.project.name === "desktop");
+  await login(page, "admin");
+  await month(page);
+  const cdp = await context.newCDPSession(page);
+  try {
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
+    await expect.poll(() => page.evaluate(() => visualViewport.scale)).toBe(2);
+    expect(await page.evaluate(() => innerWidth)).toBe(
+      page.viewportSize().width,
+    );
+    expect(await page.evaluate(() => visualViewport.width)).toBeCloseTo(
+      page.viewportSize().width / 2,
+      0,
+    );
+    await expect(page.locator(".app-navigation")).toHaveCSS(
+      "position",
+      "static",
+    );
+    await expect(page.locator(".calendar-grid")).toHaveCSS("display", "block");
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(page.viewportSize().width);
+  } finally {
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+    await cdp.detach();
+  }
+});
+
 test("login, password forms and 200% text scaling preserve touch targets, reflow and zoom", async ({
   page,
 }, info) => {

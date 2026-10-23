@@ -45,6 +45,7 @@ export function PwaStatus() {
     };
     navigator.serviceWorker.addEventListener("controllerchange", controlled);
     window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
     void navigator.serviceWorker
       .register("/sw.js", { scope: "/", updateViaCache: "none" })
       .then((r) => {
@@ -67,6 +68,7 @@ export function PwaStatus() {
         controlled,
       );
       window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
     };
   }, []);
   return (

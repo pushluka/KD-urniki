@@ -1,6 +1,7 @@
-/* Bump this version when changing the public offline page. No application shell,
+/* Bump this version for UI releases too: an already open PWA needs an update
+ * prompt even when only its CSS/JavaScript changed. No application shell,
  * authentication, API, calendar or document response is ever cached here. */
-const CACHE = "kd-urniki-pwa-v2";
+const CACHE = "kd-urniki-pwa-v3";
 const OFFLINE = "/offline.html";
 self.addEventListener("install", (event) => {
   event.waitUntil(

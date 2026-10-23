@@ -16,6 +16,15 @@ test("manifest, Apple metadata, PNG icons and Slovenian installation instruction
   request,
 }) => {
   await controlled(page);
+  const viewport = page.locator('meta[name="viewport"]');
+  await expect(viewport).toHaveCount(1);
+  await expect(viewport).toHaveAttribute("content", /width=device-width/);
+  await expect(viewport).toHaveAttribute("content", /initial-scale=1/);
+  expect(await viewport.getAttribute("content")).not.toMatch(
+    /user-scalable=no|maximum-scale/,
+  );
+  expect(await page.evaluate(() => innerWidth)).toBe(page.viewportSize().width);
+  expect(await page.evaluate(() => visualViewport.scale)).toBe(1);
   const manifest = await (await request.get("/manifest.webmanifest")).json();
   expect(manifest.name).toBe("KD Grosuplje – Urniki");
   expect(manifest.short_name).toBe("KD Urniki");
@@ -45,6 +54,12 @@ test("manifest, Apple metadata, PNG icons and Slovenian installation instruction
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "iPhone · Safari" }),
+  ).toBeVisible();
+  await expect(page.getByText("Različica prikaza: mobilni-v3.")).toBeVisible();
+  await expect(
+    page.getByText(`Širina strani: ${page.viewportSize().width} CSS px.`, {
+      exact: false,
+    }),
   ).toBeVisible();
   expect(
     await page.evaluate(
@@ -97,7 +112,7 @@ test("real worker never caches private responses; offline navigation has only a 
     await page.evaluate(async () => {
       try {
         await fetch("/api/staff");
-    await fetch("/api/push/history");
+        await fetch("/api/push/history");
         return "leaked";
       } catch {
         return "network failure";
@@ -116,4 +131,42 @@ test("real worker never caches private responses; offline navigation has only a 
   await expect(
     page.getByRole("heading", { name: "Koledar dogodkov" }),
   ).toBeVisible();
+});
+
+test("phone diagnostics distinguish a desktop-width viewport without disabling zoom", async ({
+  page,
+  context,
+}, info) => {
+  test.skip(info.project.name === "desktop");
+  await page.goto("/namestitev");
+  const diagnostics = page.getByRole("region", { name: "Preverjanje prikaza" });
+  await expect(diagnostics).toContainText("Postavitev: mobilna.");
+  // setViewportSize also resizes screen.width. CDP preserves the phone screen
+  // separately while reproducing a desktop-sized layout viewport, not Chrome's
+  // menu implementation. The measurements themselves remain real browser values.
+  const screenWidth = await page.evaluate(() => screen.width);
+  const cdp = await context.newCDPSession(page);
+  try {
+    for (const width of [980, 320]) {
+      await cdp.send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 900,
+        screenWidth,
+        screenHeight: 900,
+        deviceScaleFactor: 1,
+        mobile: true,
+      });
+      if (width === 980)
+        await expect(diagnostics.getByRole("alert")).toContainText(
+          "Telefon uporablja namizno širino strani",
+        );
+      else await expect(diagnostics.getByRole("alert")).toHaveCount(0);
+    }
+    await expect(diagnostics).toContainText("Širina strani: 320 CSS px.");
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(320);
+  } finally {
+    await cdp.detach();
+  }
 });

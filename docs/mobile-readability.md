@@ -109,3 +109,87 @@ neveljavne testne vrednosti kot pri brskalniških fixture (`e2e.supabase.test`,
 `next start` ne zadostuje. Tako PWA preizkus posodobitve dobi prijavni obrazec
 namesto opozorila o manjkajoči konfiguraciji, brez pravih ključev ali dostopa do
 produkcijskih podatkov. Vercel produkcija še vedno uporablja svoje nastavitve.
+
+## Namizni prikaz na telefonu: diagnoza in popravek (mobilni-v3)
+
+Izhodišče je `main` po PR #19 (`be0cb33`); veja Google Calendar ni vključena.
+Pregled kode je potrdil en root viewport `width=device-width, initial-scale=1,
+viewport-fit=cover`, brez prepovedi zooma. Mobilni breakpoint je 760 **CSS** px,
+ne fizičnih pik zaslona. Pri 320–430 CSS px je navigacija zgoraj, glavni del ima
+celotno širino, koledar uporablja datirane kartice; desktop ostaja sedemstolpčen.
+V korenskih elementih ni `zoom`, `transform: scale` ali desktop `min-width`.
+Tudi pregled zgrajenega CSS potrjuje pravilo `@media (max-width:760px)`.
+Novi testi preverjajo dejanski `innerWidth`, merilo visualViewport, položaj in
+širino navigacije/glavne vsebine ter širino kartice. Samo preverjanje overflowa
+ni dovolj: tudi pomanjšana stran s širino 980 px lahko tak test prestane.
+
+**Potrjena vrzel:** PR #19 je spremenil CSS, ni pa spremenil `/sw.js` (ostala je
+različica v2). Že odprta PWA ohrani stari dokument in JavaScript/CSS, dokler ni
+ponovno naložena. Nespremenjeni worker ne sproži obvestila o novi različici.
+Ta popravek spremeni worker na v3 in preveri posodobitve tudi ob vrnitvi v vidno
+aplikacijo (`visibilitychange`), ne le ob `focus`. Uporabnik mora potrditi reload;
+neshranjeni obrazci se ne zavržejo samodejno. Pri prihodnjih UI izdajah spremenite
+različico workerja tudi, če se offline stran ni spremenila. Worker še vedno
+shranjuje **samo javni offline dokument**, ne urnikov, prijave, API-jev ali PDF-jev.
+Aktivacija dejansko izbriše stare v1/v2 cache; push handlerji ostajajo nespremenjeni.
+
+To ni dokaz, da je bil prav star odprt dokument vzrok uporabnikovega posnetka.
+Namizni način brskalnika ali druga objavljena različica lahko povzročita enak
+rezultat. Iz tega razvojnega okolja produkcijska domena vrne omrežni CONNECT 403;
+fizičen Android/iPhone ni priključen. Zato produkcijske različice in uporabnikovega
+viewporta tu ni mogoče neposredno potrditi. Avtomatski Chromium testi emulirajo
+mobilne naprave; niso dokaz namestitve ali delovanja na fizičnem telefonu.
+
+### Obvezno preverjanje po objavi na telefonu
+
+1. Preverite, da Vercel produkcijski deployment kaže SHA združenega PR, ne starega
+   deploymenta ali druge veje. Odprite `https://kd-urniki.vercel.app/namestitev`.
+   V »Preverjanje prikaza« mora pisati **mobilni-v3**. Zapišite širino strani,
+   širino zaslona, postavitev, povečavo in način (brskalnik/nameščena aplikacija).
+   Meritev ne vsebuje osebnih podatkov in se nikamor ne pošilja.
+2. Android Chrome: v meniju ⋮ izključite »Namizno spletno mesto«. Pri običajnem
+   prikazu morata biti širina strani in zaslona primerljivi (npr. 393 CSS px),
+   postavitev mobilna in začetna povečava 100 %. Vrednost okoli 980 px ob zaslonu
+   okoli 393 px kaže na namizni viewport. Ne popravljajte tega z večjimi pisavami.
+3. Enako stran odprite iz nameščene ikone PWA. Način mora biti »nameščena
+   aplikacija«, različica in širina pa enaki kot v Chromu. Shranite odprte vnose,
+   sprejmite »Posodobi aplikacijo«. Če poziva ni (zelo star odprt odjemalec),
+   zaprite **vsa** okna PWA in jo z internetno povezavo odprite znova. Ne brišite
+   podatkov spletnega mesta: to odjavi uporabnika in lahko prekine push naročnino.
+4. S Chrome remote debugging (`chrome://inspect/#devices`, Android USB debugging)
+   na dejanskem zavihku/PWA preverite `window.innerWidth`, `screen.width`,
+   `visualViewport.scale`, `matchMedia('(max-width: 760px)').matches` in edini
+   `meta[name=viewport]`. V Network preverite naloženi CSS (mobilna pravila) in
+   `/sw.js` v3 z `Cache-Control: no-store`; Application → Service Workers pokaže
+   aktivnega/čakajočega workerja. Cache Storage sme vsebovati le `/offline.html`.
+5. Za administratorja, tehnika in hosteso preverite koledar z dolgim naslovom,
+   odpiranje/zapiranje dogodka, razpored, ekipo in nastavitve; pri administratorju
+   tudi osebje, nov dogodek, obrazce in zgodovino obvestil. Navigacija mora biti
+   zgoraj, vsi njeni gumbi dosegljivi, kartice pod datumi in ne sedem ozkih stolpcev.
+6. Ponovite pri 320/375/430 CSS px (DevTools device mode za natančne širine),
+   povečavi besedila 200 %, pokončno/ležeče ter z Android večjim besedilom.
+   Preverite pinch zoom, fokus inputov, tipkovnico, safe-area in odsotnost
+   vodoravnega drsenja. Ponovite v Safariju in nameščeni PWA na iPhonu.
+7. Ob nadgradnji imejte odprt neshranjen vnos: vrnitev v aplikacijo mora preveriti
+   worker, ponuditi posodobitev in ohraniti vnos do uporabnikove potrditve.
+   Po potrditvi preverite novo različico ter obstoječa push obvestila. Ne ustvarjajte
+   dodatne push naročnine samo zaradi nadgradnje prikaza.
+
+Regresije vključujejo vse tri vloge pri vseh treh širinah, normalne in 200 %
+obrazce, dvakratni pinch zoom prek Chromium CDP (`visualViewport.scale = 2` ob
+nespremenjenem `innerWidth`), namizno primerjavo, nove posnetke celotne zgornje
+mobilne navigacije ter
+produkcijsko gradnjo z dejanskim service workerjem. Prag primerjave ostane nespremenjen; obstoječa referenca zgodovine pri 430 px
+je popravljena samo zaradi napačne prekrivne maske datuma (opis spodaj).
+
+Pri ponovljenem zagonu se je pokazala tudi nestabilnost obstoječega posnetka
+zgodovine: končni PNG je bil identičen referenci, predhodni pa je imel maski
+časovnih oznak zamaknjeni za 12 px. Playwright ni dobil dveh zaporednih stabilnih
+slik. Slog samo za zajem zdaj isto magenta prekritje datumov izriše na samem DOM
+besedilu, namesto s koordinatami Playwright maske pri začasnem povečanju viewporta
+za visok element. Test počaka še na omogočen gumb po shranjevanju prebranosti.
+Referenca pri 430 px je imela maski napačno zamaknjeni že v izhodišču: del
+časovnih oznak je ostal viden. Po vizualnem pregledu je popravljena samo ta
+referenca, brez spremembe geometrije panela. Produkcijski CSS in primerjalni
+prag ostajata nespremenjena. Preverjanja
+širine, reflowa, kontrasta in velikosti kontrol tečejo pred tem na običajnem CSS.
